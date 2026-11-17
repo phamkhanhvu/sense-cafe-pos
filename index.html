@@ -1690,7 +1690,7 @@ function openCheckout(t){
     waitEl.innerHTML=""; claimTx=null;
     if(method==="transfer" && S.sepay?.key && bankReady() && c.total>0){
       const lab=ascii(t.label).toLowerCase(), cands=Object.values(S.bank||{}).filter(x=>!x.billId && x.amount===c.total && x.at>=openedAt-2*60000).sort((a,b)=>b.at-a.at);
-      const strong=cands.find(x=>{ const ct=ascii(x.content).toLowerCase(); return ct.includes("ban "+lab)||ct.includes("ban"+lab); });
+      const strong=cands.find(x=>{ const ct=ascii(x.content).toLowerCase(); return new RegExp("(^|[^a-z0-9])ban ?"+lab.replace(/[^a-z0-9 ]/g,"")+"([^a-z0-9]|$)").test(ct); });
       const tx=strong||cands[0];
       if(!tx) waitEl.append(el("div","note","Đang chờ tiền về tài khoản… (tự cập nhật, không cần tải lại)"));
       else { claimTx=tx; waitEl.append(el("div","note ok","✅ Đã nhận "+money(tx.amount)+" lúc "+hm(tx.at)+(strong?"":" (nội dung chuyển khoản khác, kiểm tra đúng bàn)")));
