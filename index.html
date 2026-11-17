@@ -763,6 +763,14 @@ function shiftTotals(sh){
 }
 const EXP_CATS=["Nguyên liệu pha chế","Dụng cụ vệ sinh & tiêu dùng","Tiền điện","Tiền nước","Tiền mạng","Nhận hàng (chú Dream)","Nhận hàng (chú Vũ)","Trả band nhạc","Tiền cúng","Khác"];
 const DENOMS=[500000,200000,100000,50000,20000,10000,5000,2000,1000];
+function breakdownBox(bd, title, openIt){
+  const rows=DENOMS.filter(d=>bd && Number(bd[d])>0); if(!rows.length) return null;
+  const dt=el("details","more"); dt.open=!!openIt; dt.append(el("summary",null,title));
+  const tb=el("table"); const th=el("tr"); ["Mệnh giá","Số tờ","Thành tiền"].forEach(h=>th.append(el("th",null,h))); tb.append(th);
+  let tot=0, n=0; rows.forEach(d=>{ const q=Number(bd[d]); tot+=q*d; n+=q; const r=el("tr"); r.append(el("td",null,money(d)), el("td",null,String(q)), el("td",null,money(q*d))); tb.append(r); });
+  const r=el("tr"); r.style.fontWeight="700"; r.append(el("td",null,"Tổng"), el("td",null,String(n)), el("td",null,money(tot))); tb.append(r);
+  dt.append(tb); return dt;
+}
 function denomCounter(target, onChange){
   const d=el("details","more"); d.append(el("summary",null,"Đếm theo mệnh giá"));
   const g=el("div","denoms"), vals={}, tot=el("div","small"); const ins=[];
@@ -801,6 +809,7 @@ function renderCash(v){
       .forEach(([a,b])=>{ const r=el("div","ln"); r.append(el("span","small",a), el("span","money",b)); grid.append(r); });
     const ex=el("div","ln"); ex.style.fontWeight="700"; ex.append(el("span",null,"Tiền mặt phải có trong két"), el("span","money",money(t.expected))); grid.append(ex);
     sc.append(grid);
+    { const bx=breakdownBox(sh.openingBreakdown,"Chi tiết tiền đầu ca đã đếm",false); if(bx) sc.append(bx); }
     const cnt=inp("countCash","Số tiền đếm được","", "numeric"), nt=inp("shiftNote","Ghi chú (nếu lệch)");
     const diff=el("div","small");
     cnt.oninput=()=>{ const d=num(cnt.value)-t.expected; diff.textContent = cnt.value ? (d===0?"Khớp két.":(d>0?"Dư ":"Thiếu ")+money(Math.abs(d))) : ""; diff.style.color = cnt.value && d!==0 ? "var(--danger)" : ""; };
@@ -815,7 +824,8 @@ function renderCash(v){
   }
   const closed=Object.values(S.shifts).filter(s=>s.closedAt && s.day===today).sort((a,b)=>b.closedAt-a.closedAt);
   closed.forEach(s=>{ const d=(s.countedCash||0)-(s.expectedCash||0);
-    sc.append(el("div","small", "Ca "+hm(s.openedAt)+"–"+hm(s.closedAt)+" ("+s.openedBy+"): "+s.billCount+" HĐ, két "+money(s.countedCash)+(d===0?" · khớp":" · "+(d>0?"dư ":"thiếu ")+money(Math.abs(d)))+(s.note?" · "+s.note:""))); });
+    sc.append(el("div","small", "Ca "+hm(s.openedAt)+"–"+hm(s.closedAt)+" ("+s.openedBy+"): "+s.billCount+" HĐ, két "+money(s.countedCash)+(d===0?" · khớp":" · "+(d>0?"dư ":"thiếu ")+money(Math.abs(d)))+(s.note?" · "+s.note:"")));
+    const b1=breakdownBox(s.openingBreakdown,"Tiền đầu ca đã đếm ("+money(s.openingCash)+")",false), b2=breakdownBox(s.closingBreakdown,"Tiền cuối ca đã đếm ("+money(s.countedCash)+")",false); if(b1) sc.append(b1); if(b2) sc.append(b2); });
   cards.append(sc);
   // expense card
   const ec=el("section","card"); ec.append(el("h2",null,"Phiếu chi"));
