@@ -1650,7 +1650,7 @@ function openCheckout(t){
   sh.append(pay);
   const cash=el("div","stack"), gi=inp("given","vd: 200000","", "numeric"), quick=el("div","chips"), change=el("div","money"); change.style.fontWeight="700";
   cash.append(field("Khách đưa",gi), quick, change); sh.append(cash);
-  const qrWrap=el("div","stack"); sh.append(qrWrap); const waitEl=el("div","stack"); sh.append(waitEl); const openedAt=Date.now(); let claimTx=null, autoDone=false;
+  const qrWrap=el("div","stack"); sh.append(qrWrap); const waitEl=el("div","stack"); sh.append(waitEl); const openedAt=Date.now(); let claimTx=null, autoDone=false; const payRef=Array.from(crypto.getRandomValues(new Uint8Array(4)),b=>"23456789ABCDEFGHJKMNPQRSTUVWXYZ"[b%31]).join(""); const payDesc="Ban "+t.label+" "+payRef;
   const totRow=el("div","row"); totRow.style.justifyContent="space-between"; const big=el("span","big"); totRow.append(el("span","label","Khách trả"), big); sh.append(totRow);
   const ok=btn("","primary"); ok.style.padding="14px";
   const btns=el("div","row"); btns.append(ok, btn("Quay lại","ghost",()=>openOrder(S.tables[t.id]))); sh.append(btns);
@@ -1678,10 +1678,10 @@ function openCheckout(t){
     if(key!==lastQr){ lastQr=key; qrWrap.innerHTML="";
       if(method==="transfer"){
         if(!bankReady()) qrWrap.append(el("div","note warn","Chưa cài tài khoản nhận tiền. Quản lý vào Cài đặt › Chuyển khoản VietQR."));
-        else{ const svg=qrSvg(vietqr(c.total,"Ban "+t.label)); const q=el("div","qrbox"); if(svg) q.innerHTML=svg;
-          const info=el("div","stack"); info.style.gap="2px"; info.append(el("b",null,money(c.total)), el("span","small",bankName()+" · "+S.cafe.bankAcc), el("span","small",S.cafe.bankOwner||""), el("span","small","Nội dung: Ban "+ascii(t.label)));
+        else{ const svg=qrSvg(vietqr(c.total,payDesc)); const q=el("div","qrbox"); if(svg) q.innerHTML=svg;
+          const info=el("div","stack"); info.style.gap="2px"; info.append(el("b",null,money(c.total)), el("span","small",bankName()+" · "+S.cafe.bankAcc), el("span","small",S.cafe.bankOwner||""), el("span","small","Nội dung: "+ascii(payDesc)));
           q.append(info); qrWrap.append(q,
-            btn("Hiện mã QR lên TV cho khách quét","",()=>{ const cc=calc(); putDisplay({active:true,tableLabel:t.label,amount:cc.total,payload:vietqr(cc.total,"Ban "+t.label),at:Date.now()}); toast("Đã hiện mã QR trên TV"); }),
+            btn("Hiện mã QR lên TV cho khách quét","",()=>{ const cc=calc(); putDisplay({active:true,tableLabel:t.label,amount:cc.total,payload:vietqr(cc.total,payDesc),at:Date.now()}); toast("Đã hiện mã QR trên TV"); }),
             el("div","small","Kiểm tra tiền đã vào tài khoản trên app ngân hàng rồi mới bấm xác nhận.")); }
       }
     }
@@ -1689,12 +1689,16 @@ function openCheckout(t){
     ok.textContent="Xác nhận đã thu "+money(c.total);
     waitEl.innerHTML=""; claimTx=null;
     if(method==="transfer" && S.sepay?.key && bankReady() && c.total>0){
-      const lab=ascii(t.label).toLowerCase(), cands=Object.values(S.bank||{}).filter(x=>!x.billId && x.amount===c.total && x.at>=openedAt-2*60000).sort((a,b)=>b.at-a.at);
-      const strong=cands.find(x=>{ const ct=ascii(x.content).toLowerCase(); return new RegExp("(^|[^a-z0-9])ban ?"+lab.replace(/[^a-z0-9 ]/g,"")+"([^a-z0-9]|$)").test(ct); });
-      const tx=strong||cands[0];
-      if(!tx) waitEl.append(el("div","note","Đang chờ tiền về tài khoản… (tự cập nhật, không cần tải lại)"));
-      else { claimTx=tx; waitEl.append(el("div","note ok","✅ Đã nhận "+money(tx.amount)+" lúc "+hm(tx.at)+(strong?"":" (nội dung chuyển khoản khác, kiểm tra đúng bàn)")));
-        if(strong && !autoDone && c.ch.length){ autoDone=true; setTimeout(()=>{ if(sheetKind==="checkout" && !ok.disabled) ok.click(); },900); } }
+      const lab=ascii(t.label).toLowerCase(), norm=x=>ascii(x.content).toLowerCase().replace(/\s+/g,""), ref=payRef.toLowerCase();
+      const all=Object.values(S.bank||{}).filter(x=>!x.billId).sort((a,b)=>b.at-a.at);
+      const exact=all.find(x=>norm(x)?.includes(ref) && x.amount===c.total);
+      const wrongAmt=all.find(x=>norm(x)?.includes(ref) && x.amount!==c.total);
+      const maybe=!exact&&!wrongAmt ? all.find(x=>x.amount===c.total && x.at>=openedAt-2*60000 && new RegExp("(^|[^a-z0-9])ban ?"+lab.replace(/[^a-z0-9 ]/g,"")+"([^a-z0-9]|$)").test(ascii(x.content).toLowerCase())) : null;
+      if(exact){ claimTx=exact; waitEl.append(el("div","note ok","✅ Đã nhận "+money(exact.amount)+" lúc "+hm(exact.at)+" (đúng mã "+payRef+")"));
+        if(!autoDone && c.ch.length){ autoDone=true; setTimeout(()=>{ if(sheetKind==="checkout" && !ok.disabled) ok.click(); },900); } }
+      else if(wrongAmt) waitEl.append(el("div","note warn","Nhận "+money(wrongAmt.amount)+" đúng mã "+payRef+" nhưng khác số tiền bill ("+money(c.total)+"). Kiểm tra lại với khách."));
+      else if(maybe){ claimTx=maybe; waitEl.append(el("div","note warn","Có khoản "+money(maybe.amount)+" lúc "+hm(maybe.at)+" ghi Ban "+t.label+" nhưng không có mã "+payRef+". Kiểm tra đúng khách rồi bấm xác nhận.")); }
+      else waitEl.append(el("div","note","Đang chờ tiền về tài khoản… (tự cập nhật, không cần tải lại)"));
     }
   }
   di.oninput=upd; gi.oninput=upd;
