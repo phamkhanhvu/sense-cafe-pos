@@ -1787,9 +1787,15 @@ function renderMusic(v){
           btn("Xuất công ban nhạc (CSV)","",()=>{ const rws=[["Ngày","Nghệ sĩ","Vai trò","Công"]]; list.forEach(x=>(x.members||[{name:x.artist,role:"",pay:x.pay}]).forEach(m=>rws.push([x.date,m.name,m.role||"",m.pay||0]))); rws.push(["","","Tổng",total]); saveFile("cong-ban-nhac-"+BP.m+".csv","\ufeff"+rws.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n"),"Đã xuất công ban nhạc"); }));
       }
     }
-    const rd=el("details","more"); rd.open=!Object.keys(S.artists).length; rd.append(el("summary",null,"Danh sách nghệ sĩ ("+Object.keys(S.artists).length+")"));
-    Object.values(S.artists).sort((x,y)=>x.name.localeCompare(y.name,"vi")).forEach(x=>{ const r=el("div","booking"), l=el("div"); l.append(el("b",null,x.name), el("div","small",(ART_ROLES.find(z=>z[0]===x.role)||[0,""])[1]+(x.rate?" · công mặc định "+money(x.rate)+"/đêm":""))); r.append(l, btn("Sửa","ghost",()=>openArtistEdit(x))); rd.append(r); });
-    rd.append(btn("Thêm nghệ sĩ","primary",()=>openArtistEdit(null))); c.append(rd);
+    const rd=el("details","more"); rd.open=true; rd.append(el("summary",null,"Công mặc định từng nghệ sĩ ("+Object.keys(S.artists).length+" người)"));
+    rd.append(el("div","small","Nhập công mỗi đêm cho từng người, bấm Lưu một lần. Sau đó bấm \"Điền công mặc định cho các đêm chưa nhập\" ở trên để áp vào các đêm trong tháng."));
+    const arts=Object.values(S.artists).sort((x,y)=>(ART_ROLES.findIndex(z=>z[0]===x.role)-ART_ROLES.findIndex(z=>z[0]===y.role))||x.name.localeCompare(y.name,"vi")), ins={};
+    if(arts.length){ const tb=el("table"); const th=el("tr"); ["Nghệ sĩ","Vai trò","Công/đêm (đ)",""].forEach(h=>th.append(el("th",null,h))); tb.append(th);
+      arts.forEach(x=>{ const r=el("tr"), i=inp("rate_"+x.id,"0",x.rate||"","numeric"); i.style.maxWidth="120px"; ins[x.id]=i; const t3=el("td"); t3.append(i); const t4=el("td"); t4.append(btn("Sửa","ghost",()=>openArtistEdit(x)));
+        r.append(el("td",null,x.name), el("td",null,(ART_ROLES.find(z=>z[0]===x.role)||[0,""])[1]), t3, t4); tb.append(r); });
+      rd.append(tb);
+      rd.append(btn("Lưu công của tất cả","primary",async()=>{ for(const x of arts){ const v=num(ins[x.id].value); if(v!==(x.rate||0)) await quiet(put("artists",x.id,{...x,rate:v})); } toast("Đã lưu công mặc định"); })); }
+    rd.append(btn("Thêm nghệ sĩ","",()=>openArtistEdit(null))); c.append(rd);
     cards.append(c); }
   { const c=el("section","card"); c.append(el("h2",null,"Đặt bàn"));
     const di=inp("bkDate",null,MU.date); di.type="date"; di.min=today; di.onchange=()=>{ MU.date=di.value||today; render(); };
