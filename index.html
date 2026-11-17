@@ -572,7 +572,21 @@ async function saveFile(filename, data, okMsg){
   try{ await downloads.save({filename, data}); if(okMsg) toast(okMsg); return true; }
   catch(e){ if(e?.code!=="declined") toast("Không tải được file ("+(e?.code||"lỗi")+")."); return false; }
 }
-const printReceipt = (b, draft) => saveFile((draft?"tam-tinh-":"hoa-don-")+b.code+".html", receiptHtml(b,draft), "Mở file vừa tải để in");
+function printReceipt(b, draft){
+  const html=receiptHtml(b,draft);
+  try{
+    const old=document.getElementById("printFrame"); if(old) old.remove();
+    const f=document.createElement("iframe"); f.id="printFrame"; f.setAttribute("aria-hidden","true");
+    f.style.cssText="position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+    f.srcdoc=html; document.body.append(f);
+    setTimeout(()=>{ try{ f.remove(); }catch(e){} }, 120000);
+    toast("Đang mở hộp thoại in…");
+  }catch(e){
+    const w=window.open("","_blank","width=420,height=700");
+    if(w){ w.document.open(); w.document.write(html); w.document.close(); }
+    else saveFile((draft?"tam-tinh-":"hoa-don-")+b.code+".html", html, "Mở file vừa tải để in");
+  }
+}
 
 /* ================= shell render ================= */
 function needsLogin(){ return loaded.staff && !me && !document.body.classList.contains("tv"); }
@@ -836,7 +850,7 @@ function billRow(b){
   dz.forEach(([n,a])=>{ const r=el("div","ln small"); r.append(el("span",null,n), el("span","money","−"+money(a))); ls.append(r); });
   if(b.void) ls.append(el("div","small danger","Huỷ bởi "+b.voidBy+(b.voidReason?": "+b.voidReason:"")));
   const acts=el("div","row"); acts.style.marginTop="6px";
-  acts.append(btn("Tải hoá đơn để in","",()=>printReceipt(b,false)));
+  acts.append(btn("In hoá đơn","",()=>printReceipt(b,false)));
   if(!b.void && can("voidBill")){
     const vr=inp("vr-"+b.id,"Lý do huỷ"); vr.hidden=true; const vb=btn("Huỷ hoá đơn","ghost danger",async()=>{ if(vr.hidden){ vr.hidden=false; vr.focus(); vb.textContent="Xác nhận huỷ"; return; } await voidBill(b, vr.value.trim()); });
     acts.append(vr,vb);
@@ -1680,7 +1694,7 @@ function showPaid(b){
   if(b.customer) sh.append(el("div","note","Cộng "+(b.pointsEarned||0)+" điểm cho "+(b.customer.name||"khách")+(b.pointsUsed?" · đã dùng "+b.pointsUsed+" điểm":"")+"."));
   const tb=Object.values(S.tables).find(x=>x.label===b.tableLabel); const left=tb?unbilled(tb.id):[];
   if(left.length) sh.append(el("div","note warn","Bàn còn "+left.length+" món chưa thanh toán ("+money(sumItems(left))+")."));
-  const row=el("div","row"); row.append(btn("Tải hoá đơn để in","primary",()=>printReceipt(b,false)), btn("Xong","ghost",closeSheet)); sh.append(row);
+  const row=el("div","row"); row.append(btn("In hoá đơn","primary",()=>printReceipt(b,false)), btn("Xong","ghost",closeSheet)); sh.append(row);
   sh.append(el("div","small","File hoá đơn mở ra sẽ tự hiện hộp thoại in, chọn máy in nhiệt khổ 80mm."));
 }
 
