@@ -1,0 +1,399 @@
+{
+ "tables": {
+  "t01": {
+   "label": "1",
+   "zone": "Trong nhà",
+   "sort": 1,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t02": {
+   "label": "2",
+   "zone": "Trong nhà",
+   "sort": 2,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t03": {
+   "label": "3",
+   "zone": "Trong nhà",
+   "sort": 3,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t04": {
+   "label": "4",
+   "zone": "Trong nhà",
+   "sort": 4,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t05": {
+   "label": "5",
+   "zone": "Trong nhà",
+   "sort": 5,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t06": {
+   "label": "6",
+   "zone": "Trong nhà",
+   "sort": 6,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t07": {
+   "label": "7",
+   "zone": "Trong nhà",
+   "sort": 7,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t08": {
+   "label": "8",
+   "zone": "Trong nhà",
+   "sort": 8,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t09": {
+   "label": "9",
+   "zone": "Trong nhà",
+   "sort": 9,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t10": {
+   "label": "10",
+   "zone": "Trong nhà",
+   "sort": 10,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t11": {
+   "label": "11",
+   "zone": "Trong nhà",
+   "sort": 11,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "t12": {
+   "label": "12",
+   "zone": "Trong nhà",
+   "sort": 12,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "s1": {
+   "label": "S1",
+   "zone": "Sân vườn",
+   "sort": 100,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "s2": {
+   "label": "S2",
+   "zone": "Sân vườn",
+   "sort": 101,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  },
+  "s3": {
+   "label": "S3",
+   "zone": "Sân vườn",
+   "sort": 102,
+   "status": "open",
+   "changedAt": 0,
+   "movedFrom": null,
+   "queuedAt": null
+  }
+ },
+ "menu": {
+  "p115": {
+   "cat": "Phiếu nước",
+   "name": "Phiếu nước",
+   "price": 115000,
+   "station": "bar",
+   "available": true,
+   "sort": 1,
+   "recipe": [],
+   "optGroups": [
+    "og_nuoc",
+    "og_nhiet"
+   ]
+  },
+  "p129": {
+   "cat": "Phiếu nước",
+   "name": "Phiếu nước + hạt",
+   "price": 129000,
+   "station": "bar",
+   "available": true,
+   "sort": 2,
+   "recipe": [],
+   "optGroups": [
+    "og_nuoc",
+    "og_nhiet"
+   ]
+  },
+  "p135": {
+   "cat": "Phiếu nước",
+   "name": "Phiếu nước + bánh",
+   "price": 135000,
+   "station": "bar",
+   "available": true,
+   "sort": 3,
+   "recipe": [],
+   "optGroups": [
+    "og_nuoc",
+    "og_nhiet"
+   ]
+  },
+  "p066": {
+   "cat": "Phiếu nước",
+   "name": "Phiếu trẻ em (dưới 1m5)",
+   "price": 66000,
+   "station": "bar",
+   "available": true,
+   "sort": 4,
+   "recipe": [],
+   "optGroups": [
+    "og_nuoc_te",
+    "og_nhiet"
+   ]
+  },
+  "p059": {
+   "cat": "Phiếu nước",
+   "name": "Phiếu nước thêm",
+   "price": 59000,
+   "station": "bar",
+   "available": true,
+   "sort": 5,
+   "recipe": [],
+   "optGroups": [
+    "og_nuoc",
+    "og_nhiet"
+   ]
+  }
+ },
+ "optgroups": {
+  "og_nuoc": {
+   "name": "Nước",
+   "multi": false,
+   "required": true,
+   "noDefault": true,
+   "sort": 1,
+   "choices": [
+    {
+     "name": "Sữa đậu đỏ (nóng)",
+     "price": 0
+    },
+    {
+     "name": "Trà gừng (nóng)",
+     "price": 0
+    },
+    {
+     "name": "Chocolate bạc hà",
+     "price": 0
+    },
+    {
+     "name": "Yogurt đá",
+     "price": 0
+    },
+    {
+     "name": "Sinh tố dâu (theo mùa)",
+     "price": 0
+    },
+    {
+     "name": "Sinh tố bơ (theo mùa)",
+     "price": 0
+    },
+    {
+     "name": "Soda Mojito",
+     "price": 0
+    },
+    {
+     "name": "Soda Mystery",
+     "price": 0
+    },
+    {
+     "name": "Cafe đen",
+     "price": 0
+    },
+    {
+     "name": "Cafe sữa",
+     "price": 0
+    },
+    {
+     "name": "Bạc xỉu",
+     "price": 0
+    },
+    {
+     "name": "Cacao",
+     "price": 0
+    },
+    {
+     "name": "Trà ô long sữa",
+     "price": 0
+    },
+    {
+     "name": "Trà mật ong",
+     "price": 0
+    },
+    {
+     "name": "Trà táo",
+     "price": 0
+    },
+    {
+     "name": "Tắc xí muội",
+     "price": 0
+    },
+    {
+     "name": "Bia Budweiser",
+     "price": 15000
+    },
+    {
+     "name": "One shot (Gin, Tequila, Baileys)",
+     "price": 39000
+    },
+    {
+     "name": "Sizzling Lady",
+     "price": 90000
+    },
+    {
+     "name": "Silence",
+     "price": 123000
+    }
+   ]
+  },
+  "og_nuoc_te": {
+   "name": "Nước trẻ em",
+   "multi": false,
+   "required": true,
+   "noDefault": true,
+   "sort": 2,
+   "choices": [
+    {
+     "name": "Sữa đậu đỏ (nóng)",
+     "price": 0
+    },
+    {
+     "name": "Trà gừng (nóng)",
+     "price": 0
+    },
+    {
+     "name": "Chocolate bạc hà",
+     "price": 0
+    },
+    {
+     "name": "Yogurt đá",
+     "price": 0
+    },
+    {
+     "name": "Sinh tố dâu (theo mùa)",
+     "price": 0
+    },
+    {
+     "name": "Sinh tố bơ (theo mùa)",
+     "price": 0
+    },
+    {
+     "name": "Soda Mojito",
+     "price": 0
+    },
+    {
+     "name": "Soda Mystery",
+     "price": 0
+    },
+    {
+     "name": "Cafe đen",
+     "price": 0
+    },
+    {
+     "name": "Cafe sữa",
+     "price": 0
+    },
+    {
+     "name": "Bạc xỉu",
+     "price": 0
+    },
+    {
+     "name": "Cacao",
+     "price": 0
+    },
+    {
+     "name": "Trà ô long sữa",
+     "price": 0
+    },
+    {
+     "name": "Trà mật ong",
+     "price": 0
+    },
+    {
+     "name": "Trà táo",
+     "price": 0
+    },
+    {
+     "name": "Tắc xí muội",
+     "price": 0
+    }
+   ]
+  },
+  "og_nhiet": {
+   "name": "Nóng / Đá",
+   "multi": false,
+   "required": false,
+   "sort": 3,
+   "choices": [
+    {
+     "name": "Đá",
+     "price": 0
+    },
+    {
+     "name": "Nóng",
+     "price": 0
+    }
+   ]
+  }
+ },
+ "config": {
+  "main": {
+   "name": "Sense coffee & acoustic",
+   "address": "304 Hai Bà Trưng, Phường 6, Đà Lạt",
+   "phone": "0912097502",
+   "wifi": "HATCATUAN",
+   "footer": "Cám ơn quý khách đã đến góc nhỏ yêu thương giữa lòng Đà Lạt yên bình",
+   "bankBin": "970422",
+   "bankAcc": "0270632939999",
+   "bankOwner": "NGUYỄN DUY ANH",
+   "menuSample": false
+  }
+ }
+}
