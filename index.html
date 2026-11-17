@@ -1730,6 +1730,26 @@ function renderMusic(v){
       r.append(left); if(can("shows")) r.append(btn("Sửa","ghost",()=>openShowEdit(s))); c.append(r); });
     if(can("shows")) c.append(btn("Thêm đêm nhạc","primary",()=>openShowEdit(null)));
     cards.append(c); }
+  if(can("shows")){ const c=el("section","card"); c.append(el("h2",null,"Công ban nhạc"));
+    const pr=el("div","row"); [["cur","Tháng này"],["prev","Tháng trước"]].forEach(([k,l])=>{ const b=btn(l,"chip",()=>{ BP.m=k; loadBandPay(); }); b.setAttribute("aria-pressed",String(BP.m===k)); pr.append(b); }); c.append(pr);
+    if(BP.key!==BP.m && !BP.loading) loadBandPay();
+    if(BP.loading||!BP.data) c.append(el("div","small","Đang tải…"));
+    else {
+      const list=BP.data.slice().sort((a,b)=>a.date.localeCompare(b.date)); const total=list.reduce((t,x)=>t+(x.pay||0),0);
+      if(!list.length) c.append(el("div","small","Chưa có đêm nhạc trong tháng này."));
+      else {
+        c.append(el("div","small",list.length+" đêm · Tổng công: "+money(total)));
+        const tb=el("table"); const th=el("tr"); ["Ngày","Ban nhạc","Công",""].forEach(h=>th.append(el("th",null,h))); tb.append(th);
+        list.forEach(x=>{ const r=el("tr"); r.append(el("td",null,fmtDate(x.date)), el("td",null,x.artist), el("td",null,x.pay?money(x.pay):"–")); const t4=el("td"); t4.append(btn("Sửa","ghost",()=>openShowEdit(x))); r.append(t4); tb.append(r); });
+        c.append(tb);
+        const cnt={}; list.forEach(x=>String(x.artist||"").split(/\s\+\s|\s·\s/).map(n=>n.replace(/\(.*?\)/g,"").trim()).filter(Boolean).forEach(n=>cnt[n]=(cnt[n]||0)+1));
+        const d=el("details","more"); d.append(el("summary",null,"Số đêm từng người")); Object.entries(cnt).sort((a,b)=>b[1]-a[1]).forEach(([n,k])=>d.append(el("div","small",n+": "+k+" đêm"))); c.append(d);
+        const ap=inp("bpAll","Công mỗi đêm (đ)","","numeric"), er=el("div","err");
+        const row=el("div","row"); row.style.alignItems="flex-end"; row.append(field("Áp công mỗi đêm cho các đêm chưa nhập",ap), btn("Áp dụng","primary",async()=>{ const v=num(ap.value); if(!v){ er.textContent="Nhập số tiền."; return; } for(const x of list.filter(z=>!z.pay)){ await quiet(put("shows",x.id,{...x,pay:v})); } await loadBandPay(); }));
+        c.append(row, er, btn("Xuất công ban nhạc (CSV)","",()=>{ const rws=[["Ngày","Ban nhạc","Ghi chú","Công"]]; list.forEach(x=>rws.push([x.date,x.artist,x.note||"",x.pay||0])); rws.push(["","","Tổng",total]); saveFile("cong-ban-nhac-"+BP.m+".csv","\ufeff"+rws.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n"),"Đã xuất công ban nhạc"); }));
+      }
+    }
+    cards.append(c); }
   { const c=el("section","card"); c.append(el("h2",null,"Đặt bàn"));
     const di=inp("bkDate",null,MU.date); di.type="date"; di.min=today; di.onchange=()=>{ MU.date=di.value||today; render(); };
     const r=el("div","row"); r.style.alignItems="flex-end"; r.append(field("Ngày",di)); if(can("booking")) r.append(btn("Thêm đặt bàn","primary",()=>openBookingEdit(null))); c.append(r);
@@ -1768,11 +1788,11 @@ function openShowEdit(s){
   sh.append(Object.assign(el("h3",null,s?"Sửa đêm nhạc":"Thêm đêm nhạc"),{id:"sheetTitle"}));
   const d=inp("shDate",null,s?.date||dayKey()); d.type="date";
   const a=inp("shStart",null,s?.start||"20:00"); a.type="time"; const b=inp("shEnd",null,s?.end||"22:30"); b.type="time";
-  const ar=inp("shArtist","Ca sĩ / ban nhạc",s?.artist), cv=inp("shCover","0",s?.cover||"","numeric"), ms=inp("shMin","0",s?.minSpend||"","numeric"), nt=inp("shNote","vd: Chủ đề nhạc Trịnh",s?.note);
-  const f=el("div","fields"); f.append(field("Ngày",d), field("Bắt đầu",a), field("Kết thúc",b), field("Ca sĩ",ar), field("Vé vào cửa / khách (đ)",cv), field("Gọi tối thiểu / khách (đ)",ms), field("Ghi chú",nt));
+  const ar=inp("shArtist","Ca sĩ / ban nhạc",s?.artist), cv=inp("shCover","0",s?.cover||"","numeric"), ms=inp("shMin","0",s?.minSpend||"","numeric"), nt=inp("shNote","vd: Chủ đề nhạc Trịnh",s?.note), pay=inp("shPay","0",s?.pay||"","numeric");
+  const f=el("div","fields"); f.append(field("Ngày",d), field("Bắt đầu",a), field("Kết thúc",b), field("Ca sĩ",ar), field("Công ban nhạc đêm này (đ)",pay), field("Vé vào cửa / khách (đ)",cv), field("Gọi tối thiểu / khách (đ)",ms), field("Ghi chú",nt));
   const err=el("div","err"); sh.append(f, err);
   const row=el("div","row"); row.append(btn("Lưu","primary",()=>{ if(!ar.value.trim()){ err.textContent="Nhập tên ca sĩ hoặc ban nhạc."; return; } if(!d.value){ err.textContent="Chọn ngày."; return; }
-    quiet(put("shows", s?s.id:uid(), {date:d.value,start:a.value,end:b.value,artist:ar.value.trim(),cover:num(cv.value),minSpend:num(ms.value),note:nt.value.trim()})); closeSheet(); toast("Đã lưu đêm nhạc"); }), btn("Huỷ","ghost",closeSheet));
+    quiet(put("shows", s?s.id:uid(), {date:d.value,start:a.value,end:b.value,artist:ar.value.trim(),cover:num(cv.value),minSpend:num(ms.value),pay:num(pay.value),note:nt.value.trim()})); closeSheet(); toast("Đã lưu đêm nhạc"); if(BP.key) loadBandPay(); }), btn("Huỷ","ghost",closeSheet));
   if(s){ const sp=el("span"); sp.style.flex="1"; row.append(sp, btn("Xoá","ghost danger",()=>{ del("shows",s.id); closeSheet(); })); }
   sh.append(row); $("#scrim").hidden=false; ar.focus();
 }
@@ -2080,6 +2100,8 @@ function openTsEdit(x){
 }
 
 /* ================= AI summary ================= */
+const BP={m:"cur",key:null,data:null,loading:false};
+async function loadBandPay(){ const t=new Date(); const f=new Date(t.getFullYear(),t.getMonth()-(BP.m==="prev"?1:0),1), n=new Date(f.getFullYear(),f.getMonth()+1,1); BP.loading=true; const k=BP.m; try{ BP.data=await fetchShows(dayKey(f),dayKey(n)); }catch(e){ BP.data=[]; } BP.key=k; BP.loading=false; render(); }
 async function fetchShows(a,b){ if(local) return Object.values(S.shows).filter(s=>s.date>=a&&s.date<b); const s=await db.collection("shows").where("date",">=",a).where("date","<",b).limit(500).get(); return s.docs.map(d=>({...d.data(),id:d.id})); }
 async function aiSummary(out, b){
   const D=R.data; if(!D||!sample) return; const A=aggregate(D), len=+D.b-+D.a; let P=null;
