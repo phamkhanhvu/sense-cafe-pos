@@ -12,7 +12,9 @@ try {
   $key = is_array($conf) ? (string)($conf['key'] ?? '') : '';
   $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
   if ($auth === '' && function_exists('getallheaders')) { foreach (getallheaders() as $k => $v) if (strtolower($k) === 'authorization') $auth = $v; }
-  if ($key === '' || !hash_equals('Apikey ' . $key, trim($auth))) { http_response_code(401); exit('{"success":false,"error":"unauthorized"}'); }
+  $qk = (string)($_GET['key'] ?? '');
+  $ok = $key !== '' && (hash_equals('Apikey ' . $key, trim($auth)) || ($qk !== '' && hash_equals($key, $qk)));
+  if (!$ok) { http_response_code(401); exit('{"success":false,"error":"unauthorized"}'); }
   $in = json_decode(file_get_contents('php://input'), true);
   if (!is_array($in) || !isset($in['id'])) { http_response_code(400); exit('{"success":false}'); }
   if (($in['transferType'] ?? '') !== 'in') { echo '{"success":true,"ignored":true}'; exit; }
