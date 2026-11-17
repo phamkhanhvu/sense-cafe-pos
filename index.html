@@ -441,6 +441,9 @@ const money = n => Math.round(n||0).toLocaleString("vi-VN")+"đ";
 const compact = n => n>=1e6 ? (n/1e6).toFixed(n>=1e7?0:1).replace(".",",")+"tr" : n>=1e3 ? Math.round(n/1e3)+"k" : String(Math.round(n));
 const pad = n => String(n).padStart(2,"0");
 const dayKey = (d=new Date()) => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+/* Ngày kinh doanh: trước 5h sáng vẫn tính là ngày hôm trước, để ca làm qua 12h đêm không bị tách đôi. */
+const BIZ_MS=5*3600*1000;
+const bizKey = (d=new Date()) => dayKey(new Date(d.getTime()-BIZ_MS));
 const hm = ts => new Date(ts).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
 const num = s => parseInt(String(s||"").replace(/\D/g,""),10)||0;
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -534,7 +537,7 @@ async function syncTable(tid){
     return quiet(put("tables", tid, {...t, status:"serve", queuedAt:null, changedAt:Date.now()}));
 }
 async function voidItem(i, reason){
-  await quiet(put("voids", uid(), {name:i.name, qty:i.qty, price:i.price, tableLabel:i.tableLabel, state:i.state, reason:reason||"", by:me.name, at:Date.now(), day:dayKey()}));
+  await quiet(put("voids", uid(), {name:i.name, qty:i.qty, price:i.price, tableLabel:i.tableLabel, state:i.state, reason:reason||"", by:me.name, at:Date.now(), day:bizKey()}));
   await del("items", i.id);
   await syncTable(i.tableId);
   toast("Đã huỷ "+i.qty+"× "+i.name);
@@ -780,7 +783,7 @@ function denomCounter(target, onChange){
   return {el:d, get:()=>{ const o={}; ins.forEach(([m,i])=>{ if(num(i.value)) o[m]=num(i.value); }); return o; }};
 }
 function renderCash(v){
-  const today=dayKey(), bills=Object.values(S.bills).filter(b=>b.day===today).sort((a,b)=>b.paidAt-a.paidAt);
+  const today=bizKey(), bills=Object.values(S.bills).filter(b=>b.day===today).sort((a,b)=>b.paidAt-a.paidAt);
   const valid=bills.filter(b=>!b.void), total=valid.reduce((s,b)=>s+b.total,0);
   const by=m=>valid.filter(b=>b.method===m).reduce((s,b)=>s+b.total,0);
   const exps=Object.values(S.expenses).filter(e=>e.day===today).sort((a,b)=>b.at-a.at), expTotal=exps.reduce((s,e)=>s+e.amount,0);
@@ -801,7 +804,7 @@ function renderCash(v){
     const oc=inp("openCash","vd: 500000","", "numeric");
     const odc=denomCounter(oc);
     sc.append(field("Tiền đầu ca trong két",oc), odc.el);
-    sc.append(btn("Mở ca","primary",async()=>{ if(!can("shift")) return; const ob=odc.get(); resetForm(); await quiet(put("shifts",uid(),{openedBy:me.name,openedAt:Date.now(),openingCash:num(oc.value),openingBreakdown:ob,closedAt:null,day:dayKey()})); toast("Đã mở ca"); }));
+    sc.append(btn("Mở ca","primary",async()=>{ if(!can("shift")) return; const ob=odc.get(); resetForm(); await quiet(put("shifts",uid(),{openedBy:me.name,openedAt:Date.now(),openingCash:num(oc.value),openingBreakdown:ob,closedAt:null,day:bizKey()})); toast("Đã mở ca"); }));
   } else {
     const t=shiftTotals(sh);
     const grid=el("div","stack"); grid.style.gap="4px";
@@ -836,7 +839,7 @@ function renderCash(v){
   const eerr=el("div","err");
   ec.append(eerr, btn("Lưu phiếu chi","primary",async()=>{
     if(!num(ea.value)){ eerr.textContent="Nhập số tiền chi."; return; } if(!en.value.trim()){ eerr.textContent="Ghi nội dung chi."; return; }
-    resetForm(); const s2=currentShift(); await quiet(put("expenses",uid(),{amount:num(ea.value),cat:ecat.value,note:en.value.trim(),by:me.name,at:Date.now(),day:dayKey(),shiftId:s2?s2.id:null})); toast("Đã lưu phiếu chi");
+    resetForm(); const s2=currentShift(); await quiet(put("expenses",uid(),{amount:num(ea.value),cat:ecat.value,note:en.value.trim(),by:me.name,at:Date.now(),day:bizKey(),shiftId:s2?s2.id:null})); toast("Đã lưu phiếu chi");
   }));
   if(exps.length){ const l=el("div","stack"); l.style.gap="4px"; exps.forEach(e=>{ const r=el("div","ln"); r.append(el("span",null,hm(e.at)+" · "+(e.cat?e.cat+" · ":"")+e.note+" · "+e.by), el("span","money","−"+money(e.amount))); l.append(r); }); ec.append(l); }
   cards.append(ec);
@@ -871,7 +874,7 @@ function billRow(b){
 /* ================= view: Báo cáo ================= */
 const R={preset:"7d", from:null, to:null, data:null, loading:false, err:""};
 function presetRange(p){
-  const t=new Date(); t.setHours(0,0,0,0); const end=new Date(t); end.setDate(end.getDate()+1);
+  const t=new Date(Date.now()-BIZ_MS); t.setHours(0,0,0,0); const end=new Date(t); end.setDate(end.getDate()+1);
   if(p==="today") return [t,end];
   if(p==="yesterday"){ const a=new Date(t); a.setDate(a.getDate()-1); return [a,t]; }
   if(p==="7d"){ const a=new Date(t); a.setDate(a.getDate()-6); return [a,end]; }
@@ -896,7 +899,7 @@ async function loadReport(){
   if(!(a<b)){ R.err="Ngày bắt đầu phải trước ngày kết thúc."; render(); return; }
   R.loading=true; R.err=""; render();
   try{
-    const [bills,exps,voids,moves,shows]=await Promise.all([fetchRange("bills","paidAt",+a,+b), fetchRange("expenses","at",+a,+b), fetchRange("voids","at",+a,+b), fetchRange("stockmoves","at",+a,+b), fetchShows(dayKey(a),dayKey(b))]);
+    const [bills,exps,voids,moves,shows]=await Promise.all([fetchRange("bills","paidAt",+a+BIZ_MS,+b+BIZ_MS), fetchRange("expenses","at",+a+BIZ_MS,+b+BIZ_MS), fetchRange("voids","at",+a+BIZ_MS,+b+BIZ_MS), fetchRange("stockmoves","at",+a+BIZ_MS,+b+BIZ_MS), fetchShows(dayKey(a),dayKey(b))]);
     const arch=Object.values(S.archive).filter(x=>{ const m0=new Date(x.month+"-01T00:00"), m1=new Date(m0.getFullYear(),m0.getMonth()+1,1); return m0<b && m1>a; });
     const archived=new Set(arch.map(x=>x.month));
     R.data={a,b,bills:bills.filter(x=>!archived.has(x.day.slice(0,7))),exps,voids,arch,waste:moves.filter(m=>m.type==="waste"),shows};
@@ -950,7 +953,7 @@ function renderReport(v){
   bar.append(ch); v.append(bar);
   if(R.preset==="custom"){
     const c=el("div","row"); c.style.marginTop="10px";
-    const f=inp("rFrom",null,R.from||dayKey()); f.type="date"; const t=inp("rTo",null,R.to||dayKey()); t.type="date";
+    const f=inp("rFrom",null,R.from||bizKey()); f.type="date"; const t=inp("rTo",null,R.to||bizKey()); t.type="date";
     c.append(field("Từ ngày",f), field("Đến ngày",t), btn("Xem báo cáo","primary",()=>{ R.from=f.value; R.to=t.value; loadReport(); })); v.append(c);
   }
   if(R.err) v.append(Object.assign(el("div","err",R.err),{style:"margin-top:10px"}));
@@ -1258,8 +1261,8 @@ const loyEarn = () => S.cafe.loyEarn||10000;
 const loyValue = () => S.cafe.loyValue ?? 1000;
 const phoneKey = p => { let d=String(p||"").replace(/\D/g,""); if(d.startsWith("84") && d.length>=11) d="0"+d.slice(2); return d; };
 function isBirthMonth(bd){ const m=String(bd||"").split(/[\/\-.]/); return m.length>=2 && parseInt(m[1],10)===new Date().getMonth()+1; }
-const todayShow = () => Object.values(S.shows).filter(x=>x.date===dayKey()).sort((a,b)=>(a.start||"").localeCompare(b.start||""))[0]||null;
-const todayBookings = () => Object.values(S.bookings).filter(b=>b.date===dayKey() && b.state==="booked");
+const todayShow = () => Object.values(S.shows).filter(x=>x.date===bizKey()).sort((a,b)=>(a.start||"").localeCompare(b.start||""))[0]||null;
+const todayBookings = () => Object.values(S.bookings).filter(b=>b.date===bizKey() && b.state==="booked");
 const openTs = sid => Object.values(S.timesheets).find(x=>x.staffId===sid && !x.out);
 const canPlay = () => can("music")||can("musicPlay");
 
@@ -1268,7 +1271,7 @@ async function sendOrder(t, cart){
   const now=Date.now(), batch=uid(), had=tableItems(t.id).length>0;
   const kitchen=cart.filter(c=>c.station!=="none");
   await Promise.all(cart.map(c=>{ const auto=c.station==="none";
-    return quiet(put("items", uid(), {tableId:t.id,tableLabel:t.label,menuId:c.menuId||"",name:c.name,cat:c.cat||"",price:c.price,qty:c.qty,opts:c.opts||[],note:c.note||"",station:c.station||"bar",state:auto?"served":"new",...(auto?{servedAt:now}:{}),at:now,day:dayKey(),batch,by:me.name,billed:false,cleared:false})); }));
+    return quiet(put("items", uid(), {tableId:t.id,tableLabel:t.label,menuId:c.menuId||"",name:c.name,cat:c.cat||"",price:c.price,qty:c.qty,opts:c.opts||[],note:c.note||"",station:c.station||"bar",state:auto?"served":"new",...(auto?{servedAt:now}:{}),at:now,day:bizKey(),batch,by:me.name,billed:false,cleared:false})); }));
   const cur=S.tables[t.id];
   if(kitchen.length) await quiet(put("tables", t.id, {...cur, status:(had && cur.status!=="open") ? "extra" : "wait", queuedAt:now, changedAt:now, paid:false}));
   else if(cur.status==="open") await quiet(put("tables", t.id, {...cur, status:"serve", changedAt:now}));
@@ -1276,7 +1279,7 @@ async function sendOrder(t, cart){
 }
 async function addDirect(t, name, cat, price, qty){
   const now=Date.now();
-  await quiet(put("items",uid(),{tableId:t.id,tableLabel:t.label,menuId:"",name,cat,price,qty,opts:[],note:"",station:"none",state:"served",servedAt:now,at:now,day:dayKey(),batch:uid(),by:me.name,billed:false,cleared:false}));
+  await quiet(put("items",uid(),{tableId:t.id,tableLabel:t.label,menuId:"",name,cat,price,qty,opts:[],note:"",station:"none",state:"served",servedAt:now,at:now,day:bizKey(),batch:uid(),by:me.name,billed:false,cleared:false}));
   const cur=S.tables[t.id]; if(cur && cur.status==="open") await quiet(put("tables",t.id,{...cur,status:"serve",changedAt:now}));
 }
 async function checkout(t, its, c, method, given, cust){
@@ -1288,7 +1291,7 @@ async function checkout(t, its, c, method, given, cust){
     subtotal:c.s, promos:c.promos, promoDiscount:c.promoAmt, manualDiscount:c.manual, pointsUsed:c.pts, pointsAmt:c.ptsAmt,
     discount:c.promoAmt+c.manual+c.ptsAmt, total:c.total, method, given:given||null, cogs, use,
     customer: cust?{phone:cust.phone,name:cust.name||""}:null, pointsEarned:earned,
-    paidAt:now, day:dayKey(d), hour:d.getHours(), by:me.name, byId:me.id, shiftId:sh?sh.id:null, void:false};
+    paidAt:now, day:bizKey(d), hour:d.getHours(), by:me.name, byId:me.id, shiftId:sh?sh.id:null, void:false};
   const id=uid();
   await quiet(put("bills", id, bill));
   await Promise.all(its.map(i=>quiet(put("items", i.id, {...i, billed:true}))));
@@ -1607,7 +1610,7 @@ function orderExtras(t){
   const show=todayShow();
   if(show?.cover && can("order")) ex.append(btn("+ Vé đêm nhạc "+compact(show.cover),"",()=>{ const c=carts[t.id] ||= []; const e=c.find(x=>x.menuId==="cover"); if(e) e.qty++; else c.push({key:"cover",menuId:"cover",name:"Vé đêm nhạc",cat:"Đêm nhạc",price:show.cover,station:"none",qty:Math.max(1,t.guests||1),opts:[],note:""}); renderCart(); }));
   if(can("music")) ex.append(btn("Yêu cầu bài hát","",()=>openSongSheet(t.id)));
-  const bk=Object.values(S.bookings).find(b=>b.date===dayKey() && b.tableId===t.id && (b.state==="booked"||b.state==="arrived"));
+  const bk=Object.values(S.bookings).find(b=>b.date===bizKey() && b.tableId===t.id && (b.state==="booked"||b.state==="arrived"));
   if(bk){ ex.append(el("span","small","Đặt bàn: "+bk.name+" · "+bk.time+" · "+(bk.people||"?")+" khách"+(bk.deposit?" · đã cọc "+money(bk.deposit):""))); if(bk.state==="booked" && can("booking")) ex.append(btn("Khách đã đến","",()=>arriveBooking(bk))); }
 }
 
@@ -1736,7 +1739,7 @@ function showPaid(b){
 const MU={date:null};
 const BK_ST={booked:"Đang chờ",arrived:"Đã đến",cancel:"Đã huỷ",noshow:"Không đến"};
 function renderMusic(v){
-  const today=dayKey(); if(!MU.date || MU.date<today) MU.date=today;
+  const today=bizKey(); if(!MU.date || MU.date<today) MU.date=today;
   const cards=el("div","cards");
   { const c=el("section","card"); c.append(el("h2",null,"Yêu cầu bài hát"));
     const q=Object.values(S.songs).filter(x=>x.state==="new").sort((a,b)=>a.at-b.at);
@@ -1803,7 +1806,7 @@ function renderMusic(v){
   v.append(cards);
 }
 async function addSong(t, song, singer, tip){
-  await quiet(put("songs",uid(),{song,singer,tableLabel:t.label,tableId:t.id,tip:tip||0,state:"new",at:Date.now(),day:dayKey(),by:me.name}));
+  await quiet(put("songs",uid(),{song,singer,tableLabel:t.label,tableId:t.id,tip:tip||0,state:"new",at:Date.now(),day:bizKey(),by:me.name}));
   if(tip>0) await addDirect(t,"Ủng hộ ca sĩ","Ủng hộ ca sĩ",tip,1);
   toast("Đã thêm yêu cầu bài “"+song+"”");
 }
@@ -1835,7 +1838,7 @@ function openArtistEdit(x){
 function openShowEdit(s){
   sheetKind="show"; const sh=$("#sheet"); sh.className="sheet"; sh.innerHTML="";
   sh.append(Object.assign(el("h3",null,s?"Sửa đêm nhạc":"Thêm đêm nhạc"),{id:"sheetTitle"}));
-  const d=inp("shDate",null,s?.date||dayKey()); d.type="date";
+  const d=inp("shDate",null,s?.date||bizKey()); d.type="date";
   const a=inp("shStart",null,s?.start||"20:00"); a.type="time"; const b=inp("shEnd",null,s?.end||"22:30"); b.type="time";
   const cv=inp("shCover","0",s?.cover||"","numeric"), ms=inp("shMin","0",s?.minSpend||"","numeric"), nt=inp("shNote","vd: Chủ đề nhạc Trịnh",s?.note);
   const f=el("div","fields"); f.append(field("Ngày",d), field("Bắt đầu",a), field("Kết thúc",b), field("Vé vào cửa / khách (đ)",cv), field("Gọi tối thiểu / khách (đ)",ms), field("Ghi chú",nt));
@@ -1862,7 +1865,7 @@ function openBookingEdit(b){
   sheetKind="booking"; const sh=$("#sheet"); sh.className="sheet"; sh.innerHTML="";
   sh.append(Object.assign(el("h3",null,b?"Sửa đặt bàn":"Thêm đặt bàn"),{id:"sheetTitle"}));
   const nm=inp("bkName","Tên khách",b?.name), ph=inp("bkPhone","Số điện thoại",b?.phone,"tel");
-  const d=inp("bkD",null,b?.date||MU.date||dayKey()); d.type="date"; const tm=inp("bkTime",null,b?.time||"19:30"); tm.type="time";
+  const d=inp("bkD",null,b?.date||MU.date||bizKey()); d.type="date"; const tm=inp("bkTime",null,b?.time||"19:30"); tm.type="time";
   const pp=inp("bkPeople","2",b?.people||"","numeric"), dp=inp("bkDep","0",b?.deposit||"","numeric"), nt=inp("bkNote","vd: sinh nhật, ngồi gần sân khấu",b?.note);
   const tb=el("select"); tb.id="bkTable"; tb.append(new Option("Chưa xếp bàn","")); tablesList().forEach(t=>tb.append(new Option("Bàn "+t.label+" · "+(t.zone||""),t.id))); tb.value=b?.tableId||"";
   const f=el("div","fields"); f.append(field("Tên khách",nm), field("Điện thoại",ph), field("Ngày",d), field("Giờ",tm), field("Số khách",pp), field("Bàn",tb), field("Tiền cọc (đ)",dp), field("Ghi chú",nt));
@@ -1958,8 +1961,8 @@ function openCount(){
     const now=Date.now(), lines=[]; closeSheet();
     for(const x of filled){ const actual=parseNum(inputs[x.id].value), old=x.qty||0, diff=Math.round((actual-old)*100)/100;
       lines.push({id:x.id,name:x.name,unit:x.unit,expected:old,actual,diff});
-      if(diff!==0){ await quiet(put("stock",x.id,{...x,qty:actual})); const mid=uid(), mv={stockId:x.id,name:x.name,unit:x.unit,type:"count",qty:diff,amount:Math.round(diff*(x.cost||0)),note:ses.value==="open"?"Kiểm kê đầu ngày":ses.value==="close"?"Kiểm kê cuối ngày":"Kiểm kê đột xuất",by:me.name,at:now,day:dayKey()}; await quiet(put("stockmoves",mid,mv)); if(KX.moves) KX.moves.unshift({...mv,id:mid}); } }
-    const rec={at:now,day:dayKey(),by:me.name,session:ses.value,sessionLabel:ses.options[ses.selectedIndex].text,lines,skipped:items.length-filled.length,note:nt.value.trim()};
+      if(diff!==0){ await quiet(put("stock",x.id,{...x,qty:actual})); const mid=uid(), mv={stockId:x.id,name:x.name,unit:x.unit,type:"count",qty:diff,amount:Math.round(diff*(x.cost||0)),note:ses.value==="open"?"Kiểm kê đầu ngày":ses.value==="close"?"Kiểm kê cuối ngày":"Kiểm kê đột xuất",by:me.name,at:now,day:bizKey()}; await quiet(put("stockmoves",mid,mv)); if(KX.moves) KX.moves.unshift({...mv,id:mid}); } }
+    const rec={at:now,day:bizKey(),by:me.name,session:ses.value,sessionLabel:ses.options[ses.selectedIndex].text,lines,skipped:items.length-filled.length,note:nt.value.trim()};
     const cid=uid(); await quiet(put("counts",cid,rec)); if(KX.counts) KX.counts.unshift({...rec,id:cid});
     render(); toast("Đã lưu kiểm kê "+filled.length+" mục"+(bad.length?", lệch "+bad.length:", khớp hết"));
   });
@@ -1992,13 +1995,13 @@ function openStockMove(s, type){
   const err=el("div","err"); sh.append(err);
   const row=el("div","row"); row.append(btn("Lưu","primary",async()=>{
     const v=parseNum(q.value); if(!(v>0) && !(type==="count" && q.value.trim()!=="")){ err.textContent="Nhập số lượng."; return; }
-    const old=s.qty||0, cost=s.cost||0, now=Date.now(); let next={...s}, mv={stockId:s.id,name:s.name,unit:s.unit,type,note:nt.value.trim(),by:me.name,at:now,day:dayKey()};
+    const old=s.qty||0, cost=s.cost||0, now=Date.now(); let next={...s}, mv={stockId:s.id,name:s.name,unit:s.unit,type,note:nt.value.trim(),by:me.name,at:now,day:bizKey()};
     if(type==="in"){ const t=num(tot.value); next.qty=Math.round((old+v)*100)/100; if(t>0) next.cost=Math.round(((Math.max(0,old)*cost)+t)/(Math.max(0,old)+v)*100)/100; mv.qty=v; mv.amount=t; }
     if(type==="waste"){ next.qty=Math.round((old-v)*100)/100; mv.qty=-v; mv.amount=Math.round(v*cost); }
     if(type==="count"){ const d=v-old; next.qty=v; mv.qty=Math.round(d*100)/100; mv.amount=Math.round(d*cost); }
     closeSheet();
     await quiet(put("stock",s.id,next)); const id=uid(); await quiet(put("stockmoves",id,mv)); if(KX.moves) KX.moves.unshift({...mv,id});
-    if(type==="in" && ex?.checked && mv.amount>0){ const s2=currentShift(); await quiet(put("expenses",uid(),{amount:mv.amount,note:"Nhập "+s.name+(mv.note?" · "+mv.note:""),by:me.name,at:now,day:dayKey(),shiftId:s2?s2.id:null})); }
+    if(type==="in" && ex?.checked && mv.amount>0){ const s2=currentShift(); await quiet(put("expenses",uid(),{amount:mv.amount,note:"Nhập "+s.name+(mv.note?" · "+mv.note:""),by:me.name,at:now,day:bizKey(),shiftId:s2?s2.id:null})); }
     render(); toast("Đã lưu phiếu "+MV[type].toLowerCase()+" "+s.name);
   }), btn("Huỷ","ghost",closeSheet));
   sh.append(row); $("#scrim").hidden=false; q.focus();
@@ -2021,7 +2024,7 @@ function renderRota(v){
   const mine=me?.name;
   const sc=el("div","scroll"), t=el("table","tbl");
   t.innerHTML=`<thead><tr><th>Ngày</th>${RO_ROLES.map(r=>"<th>"+r[1]+"</th>").join("")}</tr></thead>`;
-  const tb=el("tbody"), n=new Date(RO.month.getFullYear(),RO.month.getMonth()+1,0).getDate(), today=dayKey();
+  const tb=el("tbody"), n=new Date(RO.month.getFullYear(),RO.month.getMonth()+1,0).getDate(), today=bizKey();
   for(let i=1;i<=n;i++){ const d=new Date(RO.month.getFullYear(),RO.month.getMonth(),i), k=dayKey(d), x=by[k], tr=el("tr");
     const wd=["CN","T2","T3","T4","T5","T6","T7"][d.getDay()];
     let h=`<td style="white-space:nowrap${k===today?";font-weight:700":""}">${wd} ${i}/${d.getMonth()+1}</td>`;
@@ -2103,7 +2106,7 @@ async function loadHR(){ const [a,b]=hrRange(HR.preset); HR.loading=true; HR.key
 async function clockToggle(sid){
   sid=sid||me?.id; const st=S.staff[sid]; if(!st) return; const o=openTs(sid), now=Date.now();
   if(o){ await quiet(put("timesheets",o.id,{...o,out:now,minutes:Math.round((now-o.in)/60000)})); toast(st.name+" ra ca lúc "+hm(now)+" · làm "+fmtDur(now-o.in)); }
-  else { await quiet(put("timesheets",uid(),{staffId:sid,name:st.name,in:now,out:null,day:dayKey(),wage:st.wage||0})); toast(st.name+" vào ca lúc "+hm(now)); }
+  else { await quiet(put("timesheets",uid(),{staffId:sid,name:st.name,in:now,out:null,day:bizKey(),wage:st.wage||0})); toast(st.name+" vào ca lúc "+hm(now)); }
   HR.key="";
 }
 const cafeShiftStart=()=>S.cafe?.shiftStart||"17:00";
@@ -2142,7 +2145,7 @@ function renderHR(v){
       c.append(sc, el("div","small","Tổng lương tạm tính (gồm thưởng): "+money(tot)+". Trễ tính từ giờ vào ca chuẩn "+(cafeShiftStart())+" (đổi ở khung bên trên). Đặt lương theo giờ ở Cài đặt › Nhân viên."));
       const d=el("details","more"); d.append(el("summary",null,"Chi tiết từng ca, sửa giờ nếu quên chấm"));
       HR.data.slice().sort((a,b)=>b.in-a.in).forEach(x=>{ const r=el("div","ln"); r.append(el("span","small",x.name+" · "+new Date(x.in).toLocaleDateString("vi-VN")+" "+hm(x.in)+"–"+(x.out?hm(x.out):"đang làm")+(x.edited?" · đã sửa bởi "+x.editedBy:"")), btn("Sửa","ghost",()=>openTsEdit(x))); d.append(r); });
-      c.append(d, btn("Xuất bảng công (CSV)","",()=>{ const rws=[["Nhân viên","Ngày","Vào","Ra","Số phút","Lương/giờ","Thành tiền"]]; HR.data.slice().sort((a,b)=>a.in-b.in).forEach(x=>{ const m=x.out?Math.round((x.out-x.in)/60000):""; const w=S.staff[x.staffId]?.wage||x.wage||0; rws.push([x.name,new Date(x.in).toLocaleDateString("vi-VN"),hm(x.in),x.out?hm(x.out):"",m,w,m?Math.round(m/60*w):""]); }); saveFile("bang-cong-"+dayKey()+".csv", csv(rws), "Đã xuất bảng công"); }));
+      c.append(d, btn("Xuất bảng công (CSV)","",()=>{ const rws=[["Nhân viên","Ngày","Vào","Ra","Số phút","Lương/giờ","Thành tiền"]]; HR.data.slice().sort((a,b)=>a.in-b.in).forEach(x=>{ const m=x.out?Math.round((x.out-x.in)/60000):""; const w=S.staff[x.staffId]?.wage||x.wage||0; rws.push([x.name,new Date(x.in).toLocaleDateString("vi-VN"),hm(x.in),x.out?hm(x.out):"",m,w,m?Math.round(m/60*w):""]); }); saveFile("bang-cong-"+bizKey()+".csv", csv(rws), "Đã xuất bảng công"); }));
     }
     cards.append(c); }
   v.append(cards);
@@ -2233,7 +2236,7 @@ if(tvOn) document.body.classList.add("tv"), $("#btnTv").textContent="Thoát TV";
   try{ const user=await window.claude.use("user"); isOwner=!!(user && await user.isOwner()); const w=await user?.can?.("data.write"); if(w===false){ canWrite=false; showNote("Tài khoản claude.ai trên máy này chỉ được xem."); } }catch(e){}
   const onErr=()=>showNote("Mất kết nối dữ liệu. Tải lại trang để nối lại.");
   const toMap=snap=>Object.fromEntries(snap.docs.map(d=>[d.id,{...d.data(),id:d.id}]));
-  let today=dayKey(), daySubs=[];
+  let today=bizKey(), daySubs=[];
   db.collection("tables").onSnapshot(s=>{ S.tables=toMap(s); loaded.tables=true; render(); }, onErr);
   db.collection("staff").onSnapshot(s=>{ S.staff=toMap(s); loaded.staff=true; resolveMe(); render(); }, onErr);
   db.collection("optgroups").onSnapshot(s=>{ S.optgroups=toMap(s); render(); }, onErr);
@@ -2260,7 +2263,7 @@ if(tvOn) document.body.classList.add("tv"), $("#btnTv").textContent="Thoát TV";
   db.collection("archive").onSnapshot(s=>{ S.archive=toMap(s); }, ()=>{});
   db.doc("config/main").onSnapshot(s=>{ S.cafe = s.exists ? {name:"",menuSample:false,...s.data()} : {name:"",menuSample:false}; render(); }, ()=>{});
   db.doc("display/pay").onSnapshot(s=>{ S.display = s.exists ? s.data() : {}; render(); }, ()=>{});
-  setInterval(()=>{ if(dayKey()!==today){ today=dayKey(); S.bills={}; S.expenses={}; S.songs={}; daySh={}; subDay(); } }, 60000);
+  setInterval(()=>{ if(bizKey()!==today){ today=bizKey(); S.bills={}; S.expenses={}; S.songs={}; daySh={}; subDay(); } }, 60000);
 })();
 </script>
 </html>
