@@ -1719,7 +1719,7 @@ function showPaid(b){
   const tb=Object.values(S.tables).find(x=>x.label===b.tableLabel); const left=tb?unbilled(tb.id):[];
   if(left.length) sh.append(el("div","note warn","Bàn còn "+left.length+" món chưa thanh toán ("+money(sumItems(left))+")."));
   const row=el("div","row"); row.append(btn("In hoá đơn","primary",()=>printReceipt(b,false)), btn("Xong","ghost",closeSheet)); sh.append(row);
-  sh.append(el("div","small","File hoá đơn mở ra sẽ tự hiện hộp thoại in, chọn máy in nhiệt (Xprinter XP-58), khổ giấy 58mm, lề "Không có"."));
+  sh.append(el("div","small","File hoá đơn mở ra sẽ tự hiện hộp thoại in, chọn máy in nhiệt (Xprinter XP-58), khổ giấy 58mm, lề Không có (None)."));
 }
 
 /* ================= view: Nhạc & đặt bàn ================= */
