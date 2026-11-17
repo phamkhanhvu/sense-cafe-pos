@@ -10,3 +10,7 @@ Options -Indexes
   RewriteCond %{HTTP:Authorization} .
   RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 </IfModule>
+<Files "sepay.php">
+  Require all granted
+  Satisfy Any
+</Files>
