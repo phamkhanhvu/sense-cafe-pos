@@ -63,6 +63,11 @@ try {
     $pdo->prepare('REPLACE INTO pos_docs (col, id, data) VALUES (?, ?, ?)')->execute([$col, $id, json_encode($in['data'], JSON_UNESCAPED_UNICODE)]);
     bump($pdo, $col); echo '{"ok":true}'; exit;
   }
+  if ($op === 'claim') {
+    $st = $pdo->prepare('INSERT IGNORE INTO pos_docs (col, id, data) VALUES (?, ?, ?)');
+    $st->execute(['claims', $id, json_encode(['at' => time()])]);
+    echo json_encode(['won' => $st->rowCount() > 0]); exit;
+  }
   if ($op === 'del') {
     $pdo->prepare('DELETE FROM pos_docs WHERE col = ? AND id = ?')->execute([$col, $id]);
     bump($pdo, $col); echo '{"ok":true}'; exit;
