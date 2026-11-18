@@ -1674,7 +1674,7 @@ function orderExtras(t){
   if(show?.cover && can("order")) ex.append(btn("+ Vé đêm nhạc "+compact(show.cover),"",()=>{ const c=carts[t.id] ||= []; const e=c.find(x=>x.menuId==="cover"); if(e) e.qty++; else c.push({key:"cover",menuId:"cover",name:"Vé đêm nhạc",cat:"Đêm nhạc",price:show.cover,station:"none",qty:Math.max(1,t.guests||1),opts:[],note:""}); renderCart(); }));
   if(can("music")) ex.append(btn("Yêu cầu bài hát","",()=>openSongSheet(t.id)));
   const bk=Object.values(S.bookings).find(b=>b.date===bizKey() && b.tableId===t.id && (b.state==="booked"||b.state==="arrived"));
-  if(bk){ ex.append(el("span","small","Đặt bàn: "+bk.name+" · "+bk.time+" · "+(bk.people||"?")+" khách"+(bk.deposit?" · đã cọc "+money(bk.deposit):""))); if(bk.state==="booked" && can("booking")) ex.append(btn("Khách đã đến","",()=>arriveBooking(bk))); }
+  if(bk){ ex.append(el("span","small","Đặt bàn: "+bk.name+" · "+bk.time+" · "+(bk.people||"?")+" khách"+(bk.deposit?" · đã cọc "+money(bk.deposit):""))); if(bk.state==="booked" && can("booking")) ex.append(btn("Khách đã đến","",()=>arriveBooking(bk)), btn("Đổi bàn đặt","",()=>openBookingMove(bk)), btn("Không đến","ghost",async()=>{ await quiet(put("bookings",bk.id,{...bk,state:"noshow",noshowAt:Date.now()})); closeSheet(); toast("Đã ghi "+bk.name+" không đến"); })); }
 }
 
 /* ================= checkout ================= */
