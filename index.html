@@ -652,6 +652,7 @@ function printReceipt(b, draft){
 /* ================= shell render ================= */
 function needsLogin(){ return loaded.staff && !me && !document.body.classList.contains("tv"); }
 function render(){
+  if(!seeded && typeof seedMenu==="function" && window.__claim) seedMenu();
   const V=$("#view"), keep={}; let focusId=null; const sy=window.scrollY;
   if(!render.reset){ V.querySelectorAll("input[id],select[id],textarea[id]").forEach(e=>{ keep[e.id]= e.type==="checkbox"? e.checked : e.value; }); const a=document.activeElement; if(a && V.contains(a) && a.id) focusId=a.id; }
   render.reset=false;
