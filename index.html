@@ -626,6 +626,13 @@ async function autoSettle(){
     }finally{ settling.delete(t.id); }
   }
 }
+let seeded=false;
+async function seedMenu(){
+  if(seeded||!me||!can("menu")) return; seeded=true;
+  if(!(await window.__claim("seed_banh_hat_1118"))) return;
+  const items=[["bn_classic","Bánh lưỡi mèo classic",30000,10],["bn_tratxanh","Bánh lưỡi mèo vị trà xanh",30000,11],["hat_19","Hạt",19000,12]];
+  for(const [id,name,price,sort] of items) if(!S.menu[id]) await quiet(put("menu",id,{cat:"Bánh & hạt",name,price,station:"bar",available:true,sort,recipe:[],optGroups:[]}));
+}
 function printReceipt(b, draft){
   const html=receiptHtml(b,draft);
   try{
@@ -2343,7 +2350,7 @@ if(tvOn) document.body.classList.add("tv"), $("#btnTv").textContent="Thoát TV";
   db.collection("stock").onSnapshot(s=>{ S.stock=toMap(s); render(); }, onErr);
   db.collection("artists").onSnapshot(s=>{ S.artists=toMap(s); render(); }, ()=>{});
   db.collection("timesheets").where("out","==",null).onSnapshot(s=>{ S.timesheets=toMap(s); render(); }, onErr);
-  db.collection("menu").onSnapshot(s=>{ S.menu=toMap(s); render(); if(sheetKind==="order") renderPick(); }, onErr);
+  db.collection("menu").onSnapshot(s=>{ S.menu=toMap(s); render(); if(sheetKind==="order") renderPick(); seedMenu(); }, onErr);
   db.collection("items").where("cleared","==",false).onSnapshot(s=>{ S.items=toMap(s); render(); }, onErr);
   let openSh={}, daySh={}; const mergeSh=()=>{ S.shifts={...daySh,...openSh}; render(); };
   db.collection("shifts").where("closedAt","==",null).onSnapshot(s=>{ openSh=toMap(s); mergeSh(); }, onErr);
