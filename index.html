@@ -1009,6 +1009,7 @@ function hbars(entries, fmt){
   entries.forEach(([n,v,extra])=>{ const r=el("div","hbar"), ln=el("div","ln"); ln.append(el("span",null,n), el("span","money",fmt(v)+(extra?" · "+extra:""))); const tr=el("div","track"), f=el("div","fill"); f.style.width=Math.max(1,v/mx*100)+"%"; tr.append(f); r.append(ln,tr); box.append(r); });
   return box;
 }
+const RS={sort:"qty"};
 function renderReport(v){
   const bar=el("div","row"); const ch=el("div","chips");
   [["today","Hôm nay"],["yesterday","Hôm qua"],["7d","7 ngày"],["30d","30 ngày"],["month","Tháng này"],["lastmonth","Tháng trước"],["custom","Tuỳ chọn"]].forEach(([k,l])=>{ const b=btn(l,"chip",()=>{ R.preset=k; if(k!=="custom") loadReport(); else render(); }); b.setAttribute("aria-pressed",String(R.preset===k)); ch.append(b); });
@@ -1044,11 +1045,15 @@ function renderReport(v){
   { const c=el("section","card chart"); c.append(el("h2",null,"Giờ cao điểm")); const sc=el("div","scroll"); sc.innerHTML=barChart(hl.map(h=>h+"h"), hl.map(h=>A.byHour[h]), {title:"Doanh thu theo giờ", maxLabels:9}); c.append(sc, el("div","small","Cột đậm là tổng doanh thu theo khung giờ trong kỳ.")); cards.append(c); }
   { const c=el("section","card"); c.append(el("h2",null,"Hình thức thanh toán"), hbars(Object.entries(A.byMethod).map(([m,x])=>[METHODS[m]||m,x, A.rev?Math.round(x/A.rev*100)+"%":""]), money)); cards.append(c); }
   { const c=el("section","card"); c.append(el("h2",null,"Theo nhóm món"), hbars(Object.entries(A.cats).sort((a,b)=>b[1]-a[1]), money)); cards.append(c); }
-  { const c=el("section","card"); c.append(el("h2",null,"Món bán chạy"));
-    const items=Object.entries(A.items).sort((a,b)=>b[1].rev-a[1].rev);
-    const sc=el("div","scroll"), t=el("table","tbl"); t.innerHTML=`<thead><tr><th>Món</th><th class="r">SL</th><th class="r">Doanh thu</th><th class="r">Tỷ trọng</th></tr></thead>`;
-    const tb=el("tbody"); items.slice(0,30).forEach(([n,x])=>{ const r=el("tr"); r.innerHTML=`<td>${esc(n)}</td><td class="r">${x.qty}</td><td class="r">${money(x.rev)}</td><td class="r">${A.rev?Math.round(x.rev/A.rev*100):0}%</td>`; tb.append(r); });
-    if(!items.length){ const r=el("tr"); r.innerHTML=`<td colspan="4" class="small">Chưa có dữ liệu trong kỳ này.</td>`; tb.append(r); }
+  { const c=el("section","card"); c.style.gridColumn="1 / -1"; c.append(el("h2",null,"Món bán chạy"));
+    const sr=el("div","row"); [["qty","Theo số lượng"],["rev","Theo doanh thu"]].forEach(([k,l])=>{ const b=btn(l,"chip",()=>{ RS.sort=k; render(); }); b.setAttribute("aria-pressed",String(RS.sort===k)); sr.append(b); }); c.append(sr);
+    const items=Object.entries(A.items).sort((a,b)=>b[1][RS.sort]-a[1][RS.sort]||b[1].rev-a[1].rev);
+    const isBanh=(n,x)=>/banh/.test(ascii(n).toLowerCase())||/banh/.test(ascii(x.cat||"").toLowerCase());
+    const banhItems=items.filter(([n,x])=>isBanh(n,x)), banhQty=banhItems.reduce((s,[n,x])=>s+x.qty,0), banhRev=banhItems.reduce((s,[n,x])=>s+x.rev,0);
+    if(banhItems.length) c.append(el("div","note","Bánh (gồm combo phiếu nước + bánh và món bánh riêng): "+banhQty+" phần · "+money(banhRev)));
+    const sc=el("div","scroll"), t=el("table","tbl"); t.innerHTML=`<thead><tr><th>#</th><th>Món</th><th>Nhóm</th><th class="r">SL</th><th class="r">Doanh thu</th><th class="r">Tỷ trọng</th></tr></thead>`;
+    const tb=el("tbody"); items.forEach(([n,x],i)=>{ const r=el("tr"); r.innerHTML=`<td>${i+1}</td><td>${esc(n)}</td><td class="small">${esc(x.cat||"")}</td><td class="r"><b>${x.qty}</b></td><td class="r">${money(x.rev)}</td><td class="r">${A.rev?Math.round(x.rev/A.rev*100):0}%</td>`; tb.append(r); });
+    if(!items.length){ const r=el("tr"); r.innerHTML=`<td colspan="6" class="small">Chưa có dữ liệu trong kỳ này.</td>`; tb.append(r); }
     t.append(tb); sc.append(t); c.append(sc);
     const slow=Object.values(S.menu).filter(m=>!A.items[m.name]).map(m=>m.name);
     if(slow.length && items.length) c.append(el("div","small","Không bán được trong kỳ: "+slow.slice(0,12).join(", ")+(slow.length>12?"…":"")));
