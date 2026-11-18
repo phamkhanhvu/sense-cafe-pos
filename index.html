@@ -1827,7 +1827,7 @@ function renderMusic(v){
       r.append(left); if(can("shows")) r.append(btn("Sửa","ghost",()=>openShowEdit(s))); c.append(r); });
     if(can("shows")) c.append(btn("Thêm đêm nhạc","primary",()=>openShowEdit(null)));
     cards.append(c); }
-  if(can("shows")){ const c=el("section","card"); c.append(el("h2",null,"Công ban nhạc"));
+  if(can("shows")){ const c=el("section","card"); c.style.gridColumn="1 / -1"; c.append(el("h2",null,"Công ban nhạc"));
     const pr=el("div","row"); [["cur","Tháng này"],["prev","Tháng trước"]].forEach(([k,l])=>{ const b=btn(l,"chip",()=>{ BP.m=k; loadBandPay(); }); b.setAttribute("aria-pressed",String(BP.m===k)); pr.append(b); }); c.append(pr);
     if(BP.key!==BP.m && !BP.loading) loadBandPay();
     if(BP.loading||!BP.data) c.append(el("div","small","Đang tải…"));
@@ -1847,7 +1847,7 @@ function renderMusic(v){
           btn("Xuất công ban nhạc (CSV)","",()=>{ const rws=[["Ngày","Nghệ sĩ","Vai trò","Công"]]; list.forEach(x=>(x.members||[{name:x.artist,role:"",pay:x.pay}]).forEach(m=>rws.push([x.date,m.name,m.role||"",m.pay||0]))); rws.push(["","","Tổng",total]); saveFile("cong-ban-nhac-"+BP.m+".csv","\ufeff"+rws.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n"),"Đã xuất công ban nhạc"); }));
       }
     }
-    const rd=el("details","more"); rd.open=true; rd.append(el("summary",null,"Công mặc định từng nghệ sĩ ("+Object.keys(S.artists).length+" người)"));
+    const rd=el("details","more"); rd.open=false; rd.append(el("summary",null,"Công mặc định từng nghệ sĩ ("+Object.keys(S.artists).length+" người)"));
     rd.append(el("div","small","Nhập công mỗi đêm cho từng người, bấm Lưu một lần. Sau đó bấm \"Điền công mặc định cho các đêm chưa nhập\" ở trên để áp vào các đêm trong tháng."));
     const arts=Object.values(S.artists).sort((x,y)=>(ART_ROLES.findIndex(z=>z[0]===x.role)-ART_ROLES.findIndex(z=>z[0]===y.role))||x.name.localeCompare(y.name,"vi")), ins={};
     if(arts.length){ const tb=el("table"); const th=el("tr"); ["Nghệ sĩ","Vai trò","Công/đêm (đ)",""].forEach(h=>th.append(el("th",null,h))); tb.append(th);
