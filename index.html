@@ -1795,39 +1795,9 @@ function showPaid(b){
   sh.append(el("div","small","File hoá đơn mở ra sẽ tự hiện hộp thoại in, chọn máy in nhiệt (Xprinter XP-58), khổ giấy 58mm, lề Không có (None)."));
 }
 
-/* ================= view: Nhạc & đặt bàn ================= */
-const MU={date:null};
-const BK_ST={booked:"Đang chờ",arrived:"Đã đến",cancel:"Đã huỷ",noshow:"Không đến"};
-function renderMusic(v){
-  const today=bizKey(); if(!MU.date || MU.date<today) MU.date=today;
-  const cards=el("div","cards");
-  { const c=el("section","card"); c.append(el("h2",null,"Yêu cầu bài hát"));
-    const q=Object.values(S.songs).filter(x=>x.state==="new").sort((a,b)=>a.at-b.at);
-    if(!q.length) c.append(el("div","small","Chưa có yêu cầu nào đang chờ."));
-    q.forEach((s,i)=>{ const r=el("div","song"+(i===0?" first":"")), info=el("div");
-      info.append(el("b",null,s.song), el("div","small",[s.singer,"Bàn "+s.tableLabel,s.tip?"ủng hộ "+money(s.tip):"",hm(s.at)].filter(Boolean).join(" · ")));
-      r.append(el("span","qpos",i+1), info);
-      if(canPlay()){ const g=el("div","row"); g.append(btn("Đã hát","primary",()=>quiet(put("songs",s.id,{...s,state:"played",playedAt:Date.now()}))), btn("Bỏ qua","ghost",()=>quiet(put("songs",s.id,{...s,state:"skip"})))); r.append(g); }
-      c.append(r); });
-    if(can("music")){ c.append(el("div","sep"));
-      const sg=inp("sgSong","Tên bài hát"), si=inp("sgSinger","Ca sĩ gốc, lời nhắn…"), tb=el("select"); tb.id="sgTable"; tb.append(new Option("Chọn bàn","")); tablesList().forEach(t=>tb.append(new Option("Bàn "+t.label,t.id)));
-      const tp=inp("sgTip","0","","numeric"), err=el("div","err");
-      const f=el("div","fields"); f.append(field("Bài hát",sg), field("Ghi chú",si), field("Bàn",tb), field("Ủng hộ ca sĩ (đ)",tp));
-      c.append(f, err, btn("Thêm yêu cầu","primary",async()=>{ if(!sg.value.trim()){ err.textContent="Nhập tên bài hát."; return; } const t=S.tables[tb.value]; if(!t){ err.textContent="Chọn bàn."; return; } resetForm(); await addSong(t, sg.value.trim(), si.value.trim(), num(tp.value)); }));
-      c.append(el("div","small","Tiền ủng hộ ca sĩ được cộng vào hoá đơn của bàn."));
-    }
-    const done=Object.values(S.songs).filter(x=>x.state!=="new").sort((a,b)=>b.at-a.at);
-    if(done.length){ const d=el("details","more"); d.append(el("summary",null,"Đã hát / bỏ qua hôm nay ("+done.length+")")); done.forEach(s=>d.append(el("div","small",(s.state==="played"?"Đã hát":"Bỏ qua")+" · "+s.song+" · bàn "+s.tableLabel))); c.append(d); }
-    cards.append(c); }
-  { const c=el("section","card"); c.append(el("h2",null,"Lịch đêm nhạc"));
-    const list=Object.values(S.shows).sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||"")));
-    if(!list.length) c.append(el("div","small","Chưa có lịch diễn. Thêm đêm nhạc để TV hiện thông tin và bán vé vào cửa."));
-    list.slice(0,14).forEach(s=>{ const r=el("div","booking"), left=el("div");
-      left.append(el("b",null,(s.date===today?"Hôm nay":fmtDate(s.date))+" · "+(s.start||"")+(s.end?"–"+s.end:"")+" · "+s.artist), el("div","small",[s.cover?"vé "+money(s.cover)+"/khách":"", s.minSpend?"gọi tối thiểu "+money(s.minSpend)+"/khách":"", s.note].filter(Boolean).join(" · ")||"Miễn phí vào cửa"));
-      r.append(left); if(can("shows")) r.append(btn("Sửa","ghost",()=>openShowEdit(s))); c.append(r); });
-    if(can("shows")) c.append(btn("Thêm đêm nhạc","primary",()=>openShowEdit(null)));
-    cards.append(c); }
-  if(can("shows")){ const c=el("section","card"); c.style.gridColumn="1 / -1"; c.append(el("h2",null,"Công ban nhạc"));
+function bandPayCard(){
+  if(!can("shows")) return null;
+  { const c=el("section","card"); c.style.gridColumn="1 / -1"; c.append(el("h2",null,"Công ban nhạc"));
     const pr=el("div","row"); [["cur","Tháng này"],["prev","Tháng trước"]].forEach(([k,l])=>{ const b=btn(l,"chip",()=>{ BP.m=k; loadBandPay(); }); b.setAttribute("aria-pressed",String(BP.m===k)); pr.append(b); }); c.append(pr);
     if(BP.key!==BP.m && !BP.loading) loadBandPay();
     if(BP.loading||!BP.data) c.append(el("div","small","Đang tải…"));
@@ -1856,7 +1826,15 @@ function renderMusic(v){
       rd.append(tb);
       rd.append(btn("Lưu công của tất cả","primary",async()=>{ for(const x of arts){ const v=num(ins[x.id].value); if(v!==(x.rate||0)) await quiet(put("artists",x.id,{...x,rate:v})); } toast("Đã lưu công mặc định"); })); }
     rd.append(btn("Thêm nghệ sĩ","",()=>openArtistEdit(null))); c.append(rd);
-    cards.append(c); }
+    return c; }
+}
+
+/* ================= view: Nhạc & đặt bàn ================= */
+const MU={date:null};
+const BK_ST={booked:"Đang chờ",arrived:"Đã đến",cancel:"Đã huỷ",noshow:"Không đến"};
+function renderMusic(v){
+  const today=bizKey(); if(!MU.date || MU.date<today) MU.date=today;
+  const cards=el("div","cards");
   { const c=el("section","card"); c.append(el("h2",null,"Đặt bàn"));
     const di=inp("bkDate",null,MU.date); di.type="date"; di.min=today; di.onchange=()=>{ MU.date=di.value||today; render(); };
     const r=el("div","row"); r.style.alignItems="flex-end"; r.append(field("Ngày",di)); if(can("booking")) r.append(btn("Thêm đặt bàn","primary",()=>openBookingEdit(null))); c.append(r);
@@ -1868,6 +1846,32 @@ function renderMusic(v){
       row.append(info);
       if(can("booking")){ const g=el("div","row"); if(b.state==="booked" && b.date===today) g.append(btn("Đã đến","primary",()=>arriveBooking(b))); g.append(btn("Sửa","ghost",()=>openBookingEdit(b))); row.append(g); }
       c.append(row); });
+    cards.append(c); }
+  { const c=el("section","card"); c.append(el("h2",null,"Yêu cầu bài hát"));
+    const q=Object.values(S.songs).filter(x=>x.state==="new").sort((a,b)=>a.at-b.at);
+    if(!q.length) c.append(el("div","small","Chưa có yêu cầu nào đang chờ."));
+    q.forEach((s,i)=>{ const r=el("div","song"+(i===0?" first":"")), info=el("div");
+      info.append(el("b",null,s.song), el("div","small",[s.singer,"Bàn "+s.tableLabel,s.tip?"ủng hộ "+money(s.tip):"",hm(s.at)].filter(Boolean).join(" · ")));
+      r.append(el("span","qpos",i+1), info);
+      if(canPlay()){ const g=el("div","row"); g.append(btn("Đã hát","primary",()=>quiet(put("songs",s.id,{...s,state:"played",playedAt:Date.now()}))), btn("Bỏ qua","ghost",()=>quiet(put("songs",s.id,{...s,state:"skip"})))); r.append(g); }
+      c.append(r); });
+    if(can("music")){ c.append(el("div","sep"));
+      const sg=inp("sgSong","Tên bài hát"), si=inp("sgSinger","Ca sĩ gốc, lời nhắn…"), tb=el("select"); tb.id="sgTable"; tb.append(new Option("Chọn bàn","")); tablesList().forEach(t=>tb.append(new Option("Bàn "+t.label,t.id)));
+      const tp=inp("sgTip","0","","numeric"), err=el("div","err");
+      const f=el("div","fields"); f.append(field("Bài hát",sg), field("Ghi chú",si), field("Bàn",tb), field("Ủng hộ ca sĩ (đ)",tp));
+      c.append(f, err, btn("Thêm yêu cầu","primary",async()=>{ if(!sg.value.trim()){ err.textContent="Nhập tên bài hát."; return; } const t=S.tables[tb.value]; if(!t){ err.textContent="Chọn bàn."; return; } resetForm(); await addSong(t, sg.value.trim(), si.value.trim(), num(tp.value)); }));
+      c.append(el("div","small","Tiền ủng hộ ca sĩ được cộng vào hoá đơn của bàn."));
+    }
+    const done=Object.values(S.songs).filter(x=>x.state!=="new").sort((a,b)=>b.at-a.at);
+    if(done.length){ const d=el("details","more"); d.append(el("summary",null,"Đã hát / bỏ qua hôm nay ("+done.length+")")); done.forEach(s=>d.append(el("div","small",(s.state==="played"?"Đã hát":"Bỏ qua")+" · "+s.song+" · bàn "+s.tableLabel))); c.append(d); }
+    cards.append(c); }
+  { const c=el("section","card"); c.append(el("h2",null,"Lịch đêm nhạc"));
+    const list=Object.values(S.shows).sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||"")));
+    if(!list.length) c.append(el("div","small","Chưa có lịch diễn. Thêm đêm nhạc để TV hiện thông tin và bán vé vào cửa."));
+    list.slice(0,14).forEach(s=>{ const r=el("div","booking"), left=el("div");
+      left.append(el("b",null,(s.date===today?"Hôm nay":fmtDate(s.date))+" · "+(s.start||"")+(s.end?"–"+s.end:"")+" · "+s.artist), el("div","small",[s.cover?"vé "+money(s.cover)+"/khách":"", s.minSpend?"gọi tối thiểu "+money(s.minSpend)+"/khách":"", s.note].filter(Boolean).join(" · ")||"Miễn phí vào cửa"));
+      r.append(left); if(can("shows")) r.append(btn("Sửa","ghost",()=>openShowEdit(s))); c.append(r); });
+    if(can("shows")) c.append(btn("Thêm đêm nhạc","primary",()=>openShowEdit(null)));
     cards.append(c); }
   v.append(cards);
 }
@@ -2188,6 +2192,7 @@ function openBonus(id,name,cur){
 }
 function renderHR(v){
   const cards=el("div","cards");
+  { const bc=bandPayCard(); if(bc) cards.append(bc); }
   { const c=el("section","card"); c.append(el("h2",null,"Đang trong ca"));
     const open=Object.values(S.timesheets).filter(x=>!x.out).sort((a,b)=>a.in-b.in);
     if(!open.length) c.append(el("div","small","Chưa ai chấm vào ca."));
