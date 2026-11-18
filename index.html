@@ -2002,7 +2002,7 @@ function openBookingEdit(b){
 }
 
 /* ================= view: Kho ================= */
-const KX={moves:null,loading:false,group:"all",counts:null,cloading:false};
+const KX={day:"",moves:null,loading:false,group:"all",counts:null,cloading:false};
 const MV={in:"Nhập",waste:"Huỷ",count:"Kiểm kho"};
 async function loadMoves(){ KX.loading=true; try{ KX.moves=(await fetchRange("stockmoves","at",Date.now()-30*864e5,Date.now()+864e5)).sort((a,b)=>b.at-a.at); }catch(e){ KX.moves=[]; } KX.loading=false; if(view==="kho") render(); }
 function renderStock(v){
@@ -2037,24 +2037,26 @@ function renderStock(v){
   else KX.moves.slice(0,60).forEach(m=>{ const r=el("div","ln"); r.append(el("span","small",new Date(m.at).toLocaleString("vi-VN",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+" · "+MV[m.type]+" · "+m.name+" "+(m.type==="count"&&m.qty>0?"+":"")+fmtQty(m.qty)+" "+(m.unit||"")+(m.note?" · "+m.note:"")+" · "+m.by), el("span","money",m.amount?money(m.amount):"")); h.append(r); });
   v.append(h);
   const rc=el("section","card"); rc.style.marginTop="16px"; v.append(rc);
-  const hc=el("section","card"); hc.style.marginTop="16px"; hc.append(el("h2",null,"Lịch sử kiểm kê 30 ngày"));
+  const hc=el("section","card"); hc.style.marginTop="16px"; hc.append(el("h2",null,"Lịch sử kiểm kê"));
   if(KX.counts===null && !KX.cloading) loadCounts();
   if(KX.cloading||KX.counts===null) hc.append(el("div","small","Đang tải…"));
   else if(!KX.counts.length) hc.append(el("div","small","Chưa có lần kiểm kê nào. Bấm Kiểm kê để đếm hàng đầu ngày hoặc cuối ngày."));
-  else KX.counts.slice(0,30).forEach(c=>{ const bad=(c.lines||[]).filter(l=>l.diff).length;
-    const d=el("details","bill"), sm=el("summary"); sm.append(el("strong",null,new Date(c.at).toLocaleString("vi-VN",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})), el("span","small",(c.sessionLabel||"Kiểm kê")+" · "+(c.by||"")+" · đếm "+(c.lines||[]).length+" mục"+(c.skipped?", bỏ qua "+c.skipped:"")), el("span",bad?"money danger":"small",bad?"lệch "+bad+" mục":"khớp")); d.append(sm);
-    const ln=el("div","lines"); (c.lines||[]).filter(l=>l.diff).forEach(l=>{ const r=el("div","ln"); r.append(el("span",null,l.name), el("span","money",fmtQty(l.expected)+" → "+fmtQty(l.actual)+" ("+(l.diff>0?"+":"")+fmtQty(l.diff)+")")); ln.append(r); });
-    if(!bad) ln.append(el("div","small","Tất cả khớp với số trên hệ thống.")); if(c.note) ln.append(el("div","small","Ghi chú: "+c.note)); d.append(ln); hc.append(d); });
-  if(KX.counts && KX.counts.length){ const c=KX.counts[0], ls=c.lines||[], bad=ls.filter(l=>l.diff);
-    rc.append(el("h2",null,"Báo cáo kiểm kê gần nhất"));
-    rc.append(el("div","small",new Date(c.at).toLocaleString("vi-VN",{weekday:"long",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+" · "+(c.sessionLabel||"Kiểm kê")+" · người kiểm: "+(c.by||"?")));
-    const k=el("div","kpis"); [["Đã đếm",ls.length+" mục"],["Khớp",(ls.length-bad.length)+" mục"],["Lệch",bad.length+" mục",bad.length?"neg":"pos"],...(c.skipped?[["Bỏ qua",c.skipped+" mục"]]:[])].forEach(([l,val,cl])=>{ const d=el("div","kpi"+(cl?" "+cl:"")); d.append(el("span","small",l), el("b",null,val)); k.append(d); }); rc.append(k);
-    const sc=el("div","scroll"), t=el("table","tbl"); t.innerHTML=`<thead><tr><th>Mặt hàng</th><th class="r">Hệ thống</th><th class="r">Đếm được</th><th class="r">Chênh lệch</th><th class="r">Nhập thêm</th></tr></thead>`;
-    const tb=el("tbody"); [...ls].sort((a,b)=>(b.diff?1:0)-(a.diff?1:0)||Math.abs(b.diff||0)-Math.abs(a.diff||0)).forEach(l=>{ const r=el("tr"); r.innerHTML=`<td>${esc(l.name)}</td><td class="r">${fmtQty(l.expected)}</td><td class="r"><b>${fmtQty(l.actual)}</b> <span class="small">${esc(l.unit||"")}</span></td><td class="r ${l.diff?"danger":""}">${l.diff?((l.diff>0?"+":"")+fmtQty(l.diff)):"khớp"}</td><td class="r">${l.received?"+"+fmtQty(l.received):""}</td>`; tb.append(r); });
-    t.append(tb); sc.append(t); rc.append(sc);
-    if(c.note) rc.append(el("div","small","Ghi chú: "+c.note));
-    const row=el("div","row"); row.style.marginTop="8px"; row.append(btn("In báo cáo","",()=>printCountReport(c)), btn("Tải CSV","ghost",()=>{ const rws=[["Mặt hàng","Đơn vị","Hệ thống","Đếm được","Chênh lệch","Nhập thêm"]]; ls.forEach(l=>rws.push([l.name,l.unit||"",l.expected,l.actual,l.diff||0,l.received||""])); saveFile("kiem-ke-"+dayKey(new Date(c.at))+".csv","\ufeff"+rws.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(",")).join("\n"),"Đã tải báo cáo kiểm kê"); })); rc.append(row);
-  } else rc.hidden=true;
+  else {
+    const dr=el("div","row"); const di=inp("kkDay",null,KX.day||""); di.type="date"; di.onchange=()=>{ KX.day=di.value||""; render(); };
+    dr.append(field("Xem ngày",di), btn("Tất cả các ngày","chip",()=>{ KX.day=""; render(); })); hc.append(dr);
+    const list=KX.counts.filter(c=>!KX.day||(c.day||dayKey(new Date(c.at)))===KX.day);
+    if(!list.length) hc.append(el("div","small","Không có lần kiểm kê nào trong ngày này."));
+    let lastDay=null;
+    list.slice(0,KX.day?50:60).forEach(c=>{ const dk=c.day||dayKey(new Date(c.at)); if(dk!==lastDay){ lastDay=dk; hc.append(Object.assign(el("div","label",new Date(c.at).toLocaleDateString("vi-VN",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"})),{style:"margin-top:12px"})); }
+      const ls=c.lines||[], bad=ls.filter(l=>l.diff).length;
+      const d=el("details","bill"), sm=el("summary"); sm.append(el("strong",null,new Date(c.at).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})), el("span","small",(c.sessionLabel||"Kiểm kê")+" · "+(c.by||"")+" · đếm "+ls.length+" mục"+(c.skipped?", bỏ qua "+c.skipped:"")), el("span",bad?"money danger":"small",bad?"lệch "+bad+" mục":"khớp"));
+      d.append(sm);
+      const sc=el("div","scroll"), t=el("table","tbl"); t.innerHTML=`<thead><tr><th>Mặt hàng</th><th class="r">Hệ thống</th><th class="r">Đếm được</th><th class="r">Lệch</th><th class="r">Nhập</th></tr></thead>`;
+      const tb=el("tbody"); [...ls].sort((x,y)=>(y.diff?1:0)-(x.diff?1:0)).forEach(l=>{ const r=el("tr"); r.innerHTML=`<td>${esc(l.name)}</td><td class="r">${fmtQty(l.expected)}</td><td class="r"><b>${fmtQty(l.actual)}</b> <span class="small">${esc(l.unit||"")}</span></td><td class="r ${l.diff?"danger":""}">${l.diff?((l.diff>0?"+":"")+fmtQty(l.diff)):"khớp"}</td><td class="r">${l.received?"+"+fmtQty(l.received):""}</td>`; tb.append(r); });
+      t.append(tb); sc.append(t); d.append(sc);
+      if(c.note) d.append(el("div","small","Ghi chú: "+c.note));
+      d.append(btn("In báo cáo","ghost",()=>printCountReport(c))); hc.append(d); });
+  }
   v.append(hc);
 }
 function printCountReport(c){
@@ -2069,7 +2071,7 @@ async function seedCatalog(){
   for(const x of KK_SEED){ await quiet(put("stock",uid(),{name:x.n,unit:x.u,group:x.g,qty:x.q,min:0,cost:0,order:i++})); }
   toast("Đã nạp "+KK_SEED.length+" mục. Hãy bấm Kiểm kê để đếm lại cho khớp.");
 }
-async function loadCounts(){ KX.cloading=true; try{ KX.counts=(await fetchRange("counts","at",Date.now()-30*864e5,Date.now()+864e5)).sort((a,b)=>b.at-a.at); }catch(e){ KX.counts=[]; } KX.cloading=false; if(view==="kho") render(); }
+async function loadCounts(){ KX.cloading=true; try{ KX.counts=(await fetchRange("counts","at",Date.now()-120*864e5,Date.now()+864e5)).sort((a,b)=>b.at-a.at); }catch(e){ KX.counts=[]; } KX.cloading=false; if(view==="kho") render(); }
 function openCount(){
   sheetKind="count"; const sh=$("#sheet"); sh.className="sheet wide"; sh.innerHTML="";
   const items=Object.values(S.stock).sort((a,b)=>((a.group||"hang")===(b.group||"hang")?0:((a.group||"hang")==="hang"?-1:1)) || (a.order??1e9)-(b.order??1e9) || a.name.localeCompare(b.name,"vi"));
