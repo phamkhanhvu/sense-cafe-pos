@@ -842,6 +842,23 @@ function denomCounter(target, onChange){
   ins.forEach(([m,i])=>i.oninput=calc); d.append(g,tot);
   return {el:d, get:()=>{ const o={}; ins.forEach(([m,i])=>{ if(num(i.value)) o[m]=num(i.value); }); return o; }};
 }
+function openOpeningEdit(sh){
+  sheetKind="openedit"; const s=$("#sheet"); s.className="sheet"; s.innerHTML="";
+  s.append(Object.assign(el("h3",null,"Sửa tiền đầu ca"),{id:"sheetTitle"}));
+  s.append(el("div","small","Hiện đang ghi "+money(sh.openingCash)+(sh.openingEdits&&sh.openingEdits.length?" (đã sửa "+sh.openingEdits.length+" lần)":"")+". Đếm lại rồi nhập số đúng, số tiền cuối ca phải có sẽ tự tính lại."));
+  const oc=inp("openEdit","", sh.openingCash||"","numeric"), dc=denomCounter(oc);
+  s.append(field("Tiền đầu ca đúng (đ)",oc), dc.el);
+  const nt=inp("openEditNote","Lý do sửa, vd: đếm nhầm tờ 500k"); s.append(field("Lý do",nt));
+  const err=el("div","err"); s.append(err);
+  const row=el("div","row"); row.append(btn("Lưu","primary",async()=>{
+    const v=num(oc.value); if(oc.value.trim()===""||v<0){ err.textContent="Nhập số tiền đầu ca."; return; }
+    if(!nt.value.trim()){ err.textContent="Ghi lý do sửa để đối chiếu sau này."; return; }
+    const bd=dc.get(), hasBd=Object.keys(bd).length>0;
+    const edits=[...(sh.openingEdits||[]),{at:Date.now(),by:me.name,from:sh.openingCash||0,to:v,note:nt.value.trim()}];
+    closeSheet(); await quiet(put("shifts",sh.id,{...sh,openingCash:v,openingBreakdown:hasBd?bd:(sh.openingBreakdown&&Object.entries(sh.openingBreakdown).reduce((t,[m,q])=>t+m*q,0)===v?sh.openingBreakdown:null),openingEdits:edits}));
+    toast("Đã sửa tiền đầu ca: "+money(v)); }), btn("Huỷ","ghost",closeSheet));
+  s.append(row); $("#scrim").hidden=false; oc.focus();
+}
 function renderCash(v){
   const today=bizKey(), bills=Object.values(S.bills).filter(b=>b.day===today).sort((a,b)=>b.paidAt-a.paidAt);
   const valid=bills.filter(b=>!b.void), total=valid.reduce((s,b)=>s+b.total,0);
@@ -873,6 +890,7 @@ function renderCash(v){
     const ex=el("div","ln"); ex.style.fontWeight="700"; ex.append(el("span",null,"Tiền mặt phải có trong két"), el("span","money",money(t.expected))); grid.append(ex);
     sc.append(grid);
     { const bx=breakdownBox(sh.openingBreakdown,"Chi tiết tiền đầu ca đã đếm",false); if(bx) sc.append(bx); }
+    if(can("shift")) sc.append(btn("Sửa tiền đầu ca","ghost",()=>openOpeningEdit(sh)));
     const cnt=inp("countCash","Số tiền đếm được","", "numeric"), nt=inp("shiftNote","Ghi chú (nếu lệch)");
     const diff=el("div","small");
     cnt.oninput=()=>{ const d=num(cnt.value)-t.expected; diff.textContent = cnt.value ? (d===0?"Khớp két.":(d>0?"Dư ":"Thiếu ")+money(Math.abs(d))) : ""; diff.style.color = cnt.value && d!==0 ? "var(--danger)" : ""; };
