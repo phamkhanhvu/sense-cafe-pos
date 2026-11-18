@@ -1847,7 +1847,7 @@ function renderMusic(v){
     list.forEach(b=>{ const row=el("div","booking st-b-"+b.state), info=el("div");
       info.append(el("b",null,(b.time||"")+" · "+b.name+" · "+(b.people||"?")+" khách"), el("div","small",[b.phone, b.tableLabel?"bàn "+b.tableLabel:"chưa xếp bàn", b.deposit?"cọc "+money(b.deposit):"", b.note, BK_ST[b.state]].filter(Boolean).join(" · ")));
       row.append(info);
-      if(can("booking")){ const g=el("div","row"); if(b.state==="booked" && b.date===today) g.append(btn("Đã đến","primary",()=>arriveBooking(b)), btn("Không đến","ghost",async()=>{ await quiet(put("bookings",b.id,{...b,state:"noshow",noshowAt:Date.now()})); toast("Đã ghi "+b.name+" không đến, bàn "+(b.tableLabel||"")+" mở lại"); })); g.append(btn("Sửa","ghost",()=>openBookingEdit(b))); row.append(g); }
+      if(can("booking")){ const g=el("div","row"); if(b.state==="booked" && b.date===today) g.append(btn("Đã đến","primary",()=>arriveBooking(b)), btn("Không đến","ghost",async()=>{ await quiet(put("bookings",b.id,{...b,state:"noshow",noshowAt:Date.now()})); toast("Đã ghi "+b.name+" không đến, bàn "+(b.tableLabel||"")+" mở lại"); })); if(b.state==="booked") g.append(btn("Đổi bàn","",()=>openBookingMove(b))); g.append(btn("Sửa","ghost",()=>openBookingEdit(b))); row.append(g); }
       c.append(row); });
     cards.append(c); }
   { const c=el("section","card"); c.append(el("h2",null,"Yêu cầu bài hát"));
@@ -1933,6 +1933,23 @@ function openShowEdit(s){
     await quiet(put("shows", s?s.id:uid(), {date:d.value,start:a.value,end:b.value,artist:ms2.map(m=>m.name).join(" + "),members:ms2,pay:ms2.reduce((t,m)=>t+m.pay,0),cover:num(cv.value),minSpend:num(ms.value),note:nt.value.trim()})); closeSheet(); toast("Đã lưu đêm nhạc"); if(BP.key) loadBandPay(); }), btn("Huỷ","ghost",closeSheet));
   if(s){ const sp=el("span"); sp.style.flex="1"; row.append(sp, btn("Xoá","ghost danger",()=>{ del("shows",s.id); closeSheet(); if(BP.key) loadBandPay(); })); }
   sh.append(row); $("#scrim").hidden=false;
+}
+function openBookingMove(b){
+  sheetKind="bkmove"; const sh=$("#sheet"); sh.className="sheet"; sh.innerHTML="";
+  sh.append(Object.assign(el("h3",null,"Đổi bàn đã đặt"),{id:"sheetTitle"}));
+  sh.append(el("div","small",b.name+" · "+(b.time||"")+" · "+(b.people||"?")+" khách · hiện: "+(b.tableLabel?"bàn "+b.tableLabel:"chưa xếp bàn")));
+  const tb=el("select"); tb.id="bkMoveTable"; tb.append(new Option("Chưa xếp bàn",""));
+  tablesList().forEach(t=>{ const other=Object.values(S.bookings).find(x=>x.id!==b.id&&x.state==="booked"&&x.date===b.date&&x.tableId===t.id);
+    const busy=b.date===bizKey()&&t.status!=="open";
+    tb.append(new Option("Bàn "+t.label+" · "+(t.zone||"")+(other?" · đã đặt "+other.time:"")+(busy?" · đang có khách":""),t.id)); });
+  tb.value=b.tableId||""; sh.append(field("Chuyển sang bàn",tb));
+  const err=el("div","err"); sh.append(err);
+  sh.append(el("div","row")); const row=sh.lastChild;
+  row.append(btn("Đổi bàn","primary",async()=>{
+    const t=S.tables[tb.value]; if((t?t.id:"")===(b.tableId||"")){ err.textContent="Chọn bàn khác bàn hiện tại."; return; }
+    await quiet(put("bookings",b.id,{...b,tableId:t?t.id:"",tableLabel:t?t.label:"",movedFrom:b.tableLabel||"",movedAt:Date.now()}));
+    closeSheet(); toast("Đã đổi bàn đặt của "+b.name+(t?" sang bàn "+t.label:"")); }), btn("Huỷ","ghost",closeSheet));
+  $("#scrim").hidden=false;
 }
 function openBookingEdit(b){
   sheetKind="booking"; const sh=$("#sheet"); sh.className="sheet"; sh.innerHTML="";
