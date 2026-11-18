@@ -1342,8 +1342,7 @@ async function checkout(t, its, c, method, given, cust){
   await applyStock(use, -1);
   if(cust) await applyLoyalty(cust, earned-(c.pts||0), c.total, 1);
   const all=tableItems(t.id), cur=S.tables[t.id];
-  if(all.every(x=>x.state==="served") && all.every(x=>x.billed)) await clearTable(cur);
-  else if(all.every(x=>x.billed)) await quiet(put("tables", t.id, {...cur, status: STATES[cur.status]?.queue ? "paid" : cur.status, paid:true, pay:null, changedAt:now}));
+  if(all.every(x=>x.billed)) await clearTable(cur);
   if(S.display?.active) putDisplay({active:false});
   return {...bill, id};
 }
