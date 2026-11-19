@@ -987,10 +987,10 @@ async function loadReport(){
   if(!(a<b)){ R.err="Ngày bắt đầu phải trước ngày kết thúc."; render(); return; }
   R.loading=true; R.err=""; render();
   try{
-    const [bills,exps,voids,moves,shows]=await Promise.all([fetchRange("bills","paidAt",+a+BIZ_MS,+b+BIZ_MS), fetchRange("expenses","at",+a+BIZ_MS,+b+BIZ_MS), fetchRange("voids","at",+a+BIZ_MS,+b+BIZ_MS), fetchRange("stockmoves","at",+a+BIZ_MS,+b+BIZ_MS), fetchShows(dayKey(a),dayKey(b))]);
+    const [bills,exps,voids,moves,shows,shifts]=await Promise.all([fetchRange("bills","paidAt",+a+BIZ_MS,+b+BIZ_MS), fetchRange("expenses","at",+a+BIZ_MS,+b+BIZ_MS), fetchRange("voids","at",+a+BIZ_MS,+b+BIZ_MS), fetchRange("stockmoves","at",+a+BIZ_MS,+b+BIZ_MS), fetchShows(dayKey(a),dayKey(b)), fetchRange("shifts","openedAt",+a,+b+BIZ_MS)]);
     const arch=Object.values(S.archive).filter(x=>{ const m0=new Date(x.month+"-01T00:00"), m1=new Date(m0.getFullYear(),m0.getMonth()+1,1); return m0<b && m1>a; });
     const archived=new Set(arch.map(x=>x.month));
-    R.data={a,b,bills:bills.filter(x=>!archived.has(x.day.slice(0,7))),exps,voids,arch,waste:moves.filter(m=>m.type==="waste"),shows};
+    R.data={a,b,bills:bills.filter(x=>!archived.has(x.day.slice(0,7))),exps,voids,arch,waste:moves.filter(m=>m.type==="waste"),shows,shifts};
   }catch(e){ R.err="Không tải được báo cáo ("+(e?.code||"lỗi")+"). Thử lại sau ít phút."; R.data=null; }
   R.loading=false; render();
 }
@@ -1070,6 +1070,28 @@ function renderReport(v){
   const early=A.byHour.slice(0,6).reduce((a,b)=>a+b,0); const hl=early?[...Array(24).keys()]:hours;
   { const c=el("section","card chart"); c.append(el("h2",null,"Giờ cao điểm")); const sc=el("div","scroll"); sc.innerHTML=barChart(hl.map(h=>h+"h"), hl.map(h=>A.byHour[h]), {title:"Doanh thu theo giờ", maxLabels:9}); c.append(sc, el("div","small","Cột đậm là tổng doanh thu theo khung giờ trong kỳ.")); cards.append(c); }
   { const c=el("section","card"); c.append(el("h2",null,"Hình thức thanh toán"), hbars(Object.entries(A.byMethod).map(([m,x])=>[METHODS[m]||m,x, A.rev?Math.round(x/A.rev*100)+"%":""]), money)); cards.append(c); }
+  { const c=el("section","card"); c.style.gridColumn="1 / -1"; c.append(el("h2",null,"Đối chiếu tiền két từng ngày"));
+    const rowsD=[]; const byDay={};
+    (D.shifts||[]).forEach(s=>{ (byDay[s.day||bizKey(new Date(s.openedAt))] ||= []).push(s); });
+    const billDays={}; D.bills.filter(b=>!b.void).forEach(b=>{ const o=billDays[b.day] ||= {cash:0,other:0}; if(b.method==="cash") o.cash+=b.total; else o.other+=b.total; });
+    const expDays={}; D.exps.forEach(e=>{ expDays[e.day]=(expDays[e.day]||0)+e.amount; });
+    const days=[...new Set([...Object.keys(byDay),...Object.keys(billDays),...Object.keys(expDays)])].sort().reverse();
+    if(!days.length) c.append(el("div","small","Chưa có ca nào trong kỳ này."));
+    else { const sc=el("div","scroll"), t=el("table","tbl"); t.innerHTML=`<thead><tr><th>Ngày</th><th>Ca</th><th class="r">Đầu ca</th><th class="r">Thu tiền mặt</th><th class="r">Chi</th><th class="r">Phải có</th><th class="r">Đếm cuối ca</th><th>Kết quả</th></tr></thead>`;
+      const tb=el("tbody"); const csv=[["Ngày","Ca","Người mở","Đầu ca","Thu tiền mặt","Chuyển khoản + thẻ","Chi","Phải có","Đếm cuối ca","Chênh lệch","Kết quả","Ghi chú"]]; let nBad=0;
+      days.forEach(dk=>{ const ss=(byDay[dk]||[]).sort((x,y)=>x.openedAt-y.openedAt), ds=dk.split("-").reverse().join("/");
+        if(!ss.length){ const o=billDays[dk]||{cash:0,other:0}, r=el("tr"); r.innerHTML=`<td>${ds}</td><td class="small">Không mở ca</td><td class="r">–</td><td class="r">${money(o.cash)}</td><td class="r">${money(expDays[dk]||0)}</td><td class="r">–</td><td class="r">–</td><td class="danger">Không có ca để đối chiếu</td>`; tb.append(r); csv.push([ds,"Không mở ca","",0,o.cash,o.other,expDays[dk]||0,"","","","Không có ca",""]); nBad++; return; }
+        ss.forEach(s=>{ const closed=!!s.closedAt, tt=closed?null:shiftTotals(s), cash=closed?(s.cashSales||0):tt.cash, oth=closed?((s.transferSales||0)+(s.cardSales||0)):(tt.transfer+tt.card), exp=closed?(s.expenseTotal||0):tt.exp, need=closed?(s.expectedCash||0):tt.expected, got=s.countedCash;
+          let res, cls="", diff="";
+          if(!closed){ res="Ca chưa đóng"; cls="small"; } else { const d=(got||0)-need; diff=d; if(d===0) res="Khớp két"; else { res=(d>0?"Dư ":"Thiếu ")+money(Math.abs(d)); cls="danger"; nBad++; } }
+          const notes=[s.note, ...(s.openingEdits||[]).map(e=>"Sửa đầu ca "+money(e.from)+" → "+money(e.to)+" ("+e.note+")")].filter(Boolean);
+          const r=el("tr"); r.innerHTML=`<td>${ds}</td><td class="small">${hm(s.openedAt)}${closed?"–"+hm(s.closedAt):" (đang mở)"}<br>${esc(s.openedBy||"")}</td><td class="r">${money(s.openingCash||0)}</td><td class="r">${money(cash)}</td><td class="r">−${money(exp)}</td><td class="r">${money(need)}</td><td class="r"><b>${closed?money(got||0):"–"}</b></td><td class="${cls}"><b>${res}</b>${notes.length?`<br><span class="small">${esc(notes.join(" · "))}</span>`:""}</td>`; tb.append(r);
+          csv.push([ds,hm(s.openedAt)+(closed?"–"+hm(s.closedAt):""),s.openedBy||"",s.openingCash||0,cash,oth,exp,need,closed?got||0:"",diff,res,notes.join(" · ")]); }); });
+      t.append(tb); sc.append(t);
+      c.append(el("div",nBad?"note warn":"note ok",nBad?"Có "+nBad+" ca/ngày lệch hoặc thiếu đối chiếu trong kỳ này.":"Mọi ca trong kỳ đều khớp két."), sc);
+      c.append(el("div","small","Phải có = đầu ca + thu tiền mặt − chi. Chuyển khoản và thẻ không tính vào két."));
+      c.append(btn("Tải CSV đối chiếu két","ghost",()=>saveFile("doi-chieu-ket-"+dayKey(D.a)+".csv","\ufeff"+csv.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(",")).join("\n"),"Đã tải file đối chiếu két"))); }
+    cards.append(c); }
   { const c=el("section","card"); c.append(el("h2",null,"Theo nhóm món"), hbars(Object.entries(A.cats).sort((a,b)=>b[1]-a[1]), money)); cards.append(c); }
   { const c=el("section","card"); c.style.gridColumn="1 / -1"; c.append(el("h2",null,"Món bán chạy"));
     const sr=el("div","row"); [["qty","Theo số lượng"],["rev","Theo doanh thu"]].forEach(([k,l])=>{ const b=btn(l,"chip",()=>{ RS.sort=k; render(); }); b.setAttribute("aria-pressed",String(RS.sort===k)); sr.append(b); }); c.append(sr);
