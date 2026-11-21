@@ -2234,6 +2234,8 @@ function openRotaEdit(d,x){
 }
 
 /* ================= view: Lịch band diễn ================= */
+const BAND_COLS=[["voice1","Voice 1"],["voice2","Voice 2"],["guitar","Guitar"],["cajon","Cajon"],["khac","Khác"]];
+const bandRoles=x=>{ const r={...(x?.roles||{})}; if(r.voice){ r.voice1=r.voice1||(r.voice[0]?[r.voice[0]]:[]); r.voice2=r.voice2||(r.voice[1]?[r.voice[1]]:[]); delete r.voice; } return r; };
 const BR={month:null,data:null,loading:false,key:""};
 async function loadBand(){ BR.loading=true; const a=BR.month, b=new Date(a.getFullYear(),a.getMonth()+1,1); try{ BR.data=await fetchRange("bandrota","ts",a.getTime(),b.getTime()); }catch(e){ BR.data=[]; } BR.key=dayKey(a); BR.loading=false; if(view==="band") render(); }
 const bandNames=()=>[...new Set(Object.values(S.artists).sort((x,y)=>x.name.localeCompare(y.name,"vi")).map(x=>x.name))];
@@ -2248,13 +2250,13 @@ function renderBand(v){
   const by={}; BR.data.forEach(x=>by[x.day]=x);
   const mine=me?.name, canEdit=can("rota")||can("shows");
   const sc=el("div","scroll"), t=el("table","tbl");
-  t.innerHTML=`<thead><tr><th>Ngày</th>${ART_ROLES.map(r=>"<th>"+r[1]+"</th>").join("")}</tr></thead>`;
+  t.innerHTML=`<thead><tr><th>Ngày</th>${BAND_COLS.map(r=>"<th>"+r[1]+"</th>").join("")}</tr></thead>`;
   const tb=el("tbody"), n=new Date(BR.month.getFullYear(),BR.month.getMonth()+1,0).getDate(), today=bizKey();
   for(let i=1;i<=n;i++){ const d=new Date(BR.month.getFullYear(),BR.month.getMonth(),i), k=dayKey(d), x=by[k], tr=el("tr");
     const wd=["CN","T2","T3","T4","T5","T6","T7"][d.getDay()];
     let hh=`<td style="white-space:nowrap${k===today?";font-weight:700":""}">${wd} ${i}/${d.getMonth()+1}</td>`;
-    if(x?.off) hh+=`<td colspan="${ART_ROLES.length}" class="small">Không có band${x.note?" · "+esc(x.note):""}</td>`;
-    else ART_ROLES.forEach(([r])=>{ const names=(x?.roles?.[r])||[]; hh+=`<td>${names.map(nm=>nm===mine?"<b>"+esc(nm)+"</b>":esc(nm)).join(", ")||'<span class="small">–</span>'}</td>`; });
+    if(x?.off) hh+=`<td colspan="${BAND_COLS.length}" class="small">Không có band${x.note?" · "+esc(x.note):""}</td>`;
+    else BAND_COLS.forEach(([r])=>{ const names=bandRoles(x)[r]||[]; hh+=`<td>${names.map(nm=>nm===mine?"<b>"+esc(nm)+"</b>":esc(nm)).join(", ")||'<span class="small">–</span>'}</td>`; });
     tr.innerHTML=hh;
     if(canEdit){ tr.style.cursor="pointer"; tr.onclick=()=>openBandEdit(d,x); }
     tb.append(tr); }
@@ -2266,12 +2268,12 @@ function renderBand(v){
 function openBandEdit(d,x){
   sheetKind="bandrota"; const sh=$("#sheet"); sh.className="sheet"; sh.innerHTML="";
   const k=dayKey(d); sh.append(Object.assign(el("h3",null,"Lịch band · "+d.toLocaleDateString("vi-VN",{weekday:"long",day:"numeric",month:"numeric"})),{id:"sheetTitle"}));
-  const roles={}; ART_ROLES.forEach(([r])=>roles[r]=[...((x?.roles?.[r])||[])]);
+  const roles={}; BAND_COLS.forEach(([r])=>roles[r]=[...((bandRoles(x)[r])||[])]);
   const offc=el("input"); offc.type="checkbox"; offc.id="brOff"; offc.checked=!!x?.off; const ol=el("label","chk"); ol.append(offc, el("span",null,"Không có band ngày này"), el("span")); sh.append(ol);
   const names=bandNames();
-  ART_ROLES.forEach(([r,l])=>{ const box=el("div","stack"); box.style.gap="6px"; box.append(el("div","label",l)); const ch=el("div","chips");
-    const draw=()=>{ ch.innerHTML=""; const all=[...new Set([...names,...roles[r]])]; all.forEach(nm=>{ const b=btn(nm,"chip",()=>{ const i=roles[r].indexOf(nm); if(i>=0) roles[r].splice(i,1); else roles[r].push(nm); draw(); }); b.setAttribute("aria-pressed",String(roles[r].includes(nm))); ch.append(b); }); };
-    draw(); const add=inp("brAdd_"+r,"Thêm tên khác…"); add.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); const nm=add.value.trim(); if(nm && !roles[r].includes(nm)){ roles[r].push(nm); add.value=""; draw(); } } };
+  BAND_COLS.forEach(([r,l])=>{ const box=el("div","stack"); box.style.gap="6px"; box.append(el("div","label",l)); const ch=el("div","chips");
+    const draw=()=>{ ch.innerHTML=""; const all=[...new Set([...names,...roles[r]])]; all.forEach(nm=>{ const b=btn(nm,"chip",()=>{ const i=roles[r].indexOf(nm); if(i>=0) roles[r].splice(i,1); else if(r.startsWith("voice")||r==="guitar"||r==="cajon") roles[r]=[nm]; else roles[r].push(nm); draw(); }); b.setAttribute("aria-pressed",String(roles[r].includes(nm))); ch.append(b); }); };
+    draw(); const add=inp("brAdd_"+r,"Thêm tên khác…"); add.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); const nm=add.value.trim(); if(nm && !roles[r].includes(nm)){ if(r==="khac") roles[r].push(nm); else roles[r]=[nm]; add.value=""; draw(); } } };
     box.append(ch, add); sh.append(box); });
   const nt=inp("brNote","Ghi chú (nếu có)",x?.note||""); sh.append(field("Ghi chú",nt));
   const row=el("div","row"); row.append(btn("Lưu","primary",async()=>{ closeSheet(); const rec={day:k,ts:new Date(d.getFullYear(),d.getMonth(),d.getDate(),12).getTime(),off:offc.checked,roles,note:nt.value.trim(),by:me.name};
