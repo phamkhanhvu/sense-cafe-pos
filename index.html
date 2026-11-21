@@ -1035,7 +1035,7 @@ function hbars(entries, fmt){
   entries.forEach(([n,v,extra])=>{ const r=el("div","hbar"), ln=el("div","ln"); ln.append(el("span",null,n), el("span","money",fmt(v)+(extra?" · "+extra:""))); const tr=el("div","track"), f=el("div","fill"); f.style.width=Math.max(1,v/mx*100)+"%"; tr.append(f); r.append(ln,tr); box.append(r); });
   return box;
 }
-const RS={sort:"qty"};
+const RS={sort:"qty",day:""};
 function renderReport(v){
   const bar=el("div","row"); const ch=el("div","chips");
   [["today","Hôm nay"],["yesterday","Hôm qua"],["7d","7 ngày"],["30d","30 ngày"],["month","Tháng này"],["lastmonth","Tháng trước"],["custom","Tuỳ chọn"]].forEach(([k,l])=>{ const b=btn(l,"chip",()=>{ R.preset=k; if(k!=="custom") loadReport(); else render(); }); b.setAttribute("aria-pressed",String(R.preset===k)); ch.append(b); });
@@ -1095,14 +1095,30 @@ function renderReport(v){
   { const c=el("section","card"); c.append(el("h2",null,"Theo nhóm món"), hbars(Object.entries(A.cats).sort((a,b)=>b[1]-a[1]), money)); cards.append(c); }
   { const c=el("section","card"); c.style.gridColumn="1 / -1"; c.append(el("h2",null,"Món bán chạy"));
     const sr=el("div","row"); [["qty","Theo số lượng"],["rev","Theo doanh thu"]].forEach(([k,l])=>{ const b=btn(l,"chip",()=>{ RS.sort=k; render(); }); b.setAttribute("aria-pressed",String(RS.sort===k)); sr.append(b); }); c.append(sr);
-    const items=Object.entries(A.items).sort((a,b)=>b[1][RS.sort]-a[1][RS.sort]||b[1].rev-a[1].rev);
+    const okBills=D.bills.filter(b=>!b.void), dayList=[...new Set(okBills.map(b=>b.day))].sort();
+    if(RS.day && !dayList.includes(RS.day)) RS.day="";
+    const dr=el("div","row"); dr.style.marginTop="8px";
+    const ds=el("select"); ds.id="rsDay"; ds.append(new Option("Cả kỳ ("+dayList.length+" ngày)","")); [...dayList].reverse().forEach(k=>ds.append(new Option(new Date(k+"T12:00").toLocaleDateString("vi-VN",{weekday:"short",day:"2-digit",month:"2-digit"}),k))); ds.value=RS.day; ds.onchange=()=>{ RS.day=ds.value; render(); };
+    const di=dayList.indexOf(RS.day), step=n=>{ const j=di+n; if(!RS.day){ RS.day=dayList[n>0?0:dayList.length-1]||""; } else if(j>=0&&j<dayList.length) RS.day=dayList[j]; render(); };
+    dr.append(el("span","small","Xem theo ngày"), btn("‹","chip",()=>step(-1)), ds, btn("›","chip",()=>step(1)));
+    if(RS.day) dr.append(btn("Cả kỳ","ghost",()=>{ RS.day=""; render(); }));
+    c.append(dr);
+    let src=A.items, srcRev=A.rev;
+    if(RS.day){ src={}; srcRev=0; okBills.filter(b=>b.day===RS.day).forEach(b=>{ srcRev+=b.total; b.lines.forEach(l=>{ const it=(src[l.name] ||= {qty:0,rev:0,cat:l.cat||""}); it.qty+=l.qty; it.rev+=l.qty*l.price; }); }); }
+    const items=Object.entries(src).sort((a,b)=>b[1][RS.sort]-a[1][RS.sort]||b[1].rev-a[1].rev);
     const isBanh=(n,x)=>/banh/.test(ascii(n).toLowerCase())||/banh/.test(ascii(x.cat||"").toLowerCase());
     const banhItems=items.filter(([n,x])=>isBanh(n,x)), banhQty=banhItems.reduce((s,[n,x])=>s+x.qty,0), banhRev=banhItems.reduce((s,[n,x])=>s+x.rev,0);
     if(banhItems.length) c.append(el("div","note","Bánh (gồm combo phiếu nước + bánh và món bánh riêng): "+banhQty+" phần · "+money(banhRev)));
     const sc=el("div","scroll"), t=el("table","tbl"); t.innerHTML=`<thead><tr><th>#</th><th>Món</th><th>Nhóm</th><th class="r">SL</th><th class="r">Doanh thu</th><th class="r">Tỷ trọng</th></tr></thead>`;
-    const tb=el("tbody"); items.forEach(([n,x],i)=>{ const r=el("tr"); r.innerHTML=`<td>${i+1}</td><td>${esc(n)}</td><td class="small">${esc(x.cat||"")}</td><td class="r"><b>${x.qty}</b></td><td class="r">${money(x.rev)}</td><td class="r">${A.rev?Math.round(x.rev/A.rev*100):0}%</td>`; tb.append(r); });
+    const tb=el("tbody"); items.forEach(([n,x],i)=>{ const r=el("tr"); r.innerHTML=`<td>${i+1}</td><td>${esc(n)}</td><td class="small">${esc(x.cat||"")}</td><td class="r"><b>${x.qty}</b></td><td class="r">${money(x.rev)}</td><td class="r">${srcRev?Math.round(x.rev/srcRev*100):0}%</td>`; tb.append(r); });
     if(!items.length){ const r=el("tr"); r.innerHTML=`<td colspan="6" class="small">Chưa có dữ liệu trong kỳ này.</td>`; tb.append(r); }
     t.append(tb); sc.append(t); c.append(sc);
+    if(dayList.length>1){ const dt=el("details","more"); dt.append(el("summary",null,"Số lượng từng món theo ngày ("+dayList.length+" ngày)"));
+      const mat={}; okBills.forEach(b=>b.lines.forEach(l=>{ const m=(mat[l.name] ||= {}); m[b.day]=(m[b.day]||0)+l.qty; }));
+      const names=Object.keys(mat).sort((a,b)=>Object.values(mat[b]).reduce((s,x)=>s+x,0)-Object.values(mat[a]).reduce((s,x)=>s+x,0));
+      const sc2=el("div","scroll"), t2=el("table","tbl"); t2.innerHTML=`<thead><tr><th>Món</th>${dayList.map(k=>"<th class=\"r\">"+k.slice(8)+"/"+k.slice(5,7)+"</th>").join("")}<th class="r">Tổng</th></tr></thead>`;
+      const tb2=el("tbody"); names.forEach(n=>{ const m=mat[n], tot=Object.values(m).reduce((s,x)=>s+x,0), r=el("tr"); r.innerHTML=`<td style="white-space:nowrap">${esc(n)}</td>${dayList.map(k=>`<td class="r">${m[k]||"<span class=\"small\">–</span>"}</td>`).join("")}<td class="r"><b>${tot}</b></td>`; tb2.append(r); });
+      t2.append(tb2); sc2.append(t2); dt.append(sc2); c.append(dt); }
     const slow=Object.values(S.menu).filter(m=>!A.items[m.name]).map(m=>m.name);
     if(slow.length && items.length) c.append(el("div","small","Không bán được trong kỳ: "+slow.slice(0,12).join(", ")+(slow.length>12?"…":"")));
     cards.append(c); }
