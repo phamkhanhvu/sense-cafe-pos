@@ -571,6 +571,20 @@ async function moveTable(src, dst){
   await quiet(put("tables", src.id, {...S.tables[src.id], status:"open", paid:false, queuedAt:null, movedFrom:null, guests:null, changedAt:now}));
   carts[dst.id]=[...(carts[dst.id]||[]),...(carts[src.id]||[])]; delete carts[src.id];
 }
+function openMoveSheet(t){
+  sheetKind="move"; const sh=$("#sheet"); sh.className="sheet"; sh.innerHTML="";
+  sh.append(Object.assign(el("h3",null,"Chuyển bàn "+t.label),{id:"sheetTitle"}));
+  sh.append(el("div","small","Chọn bàn muốn chuyển khách sang. Bàn đang có khách sẽ được gộp chung."));
+  const others=tablesList().filter(x=>x.id!==t.id && x.status!=="closed");
+  const zones={}; others.forEach(o=>(zones[o.zone||"Khác"] ||= []).push(o));
+  let pick=null; const go=btn("Chuyển","primary",async()=>{ const dst=S.tables[pick]; if(!dst) return; closeSheet(); await moveTable(S.tables[t.id],dst); toast("Đã chuyển bàn "+t.label+" sang bàn "+dst.label); }); go.disabled=true;
+  const chipsAll=[];
+  Object.entries(zones).forEach(([z,list])=>{ const box=el("div","stack"); box.style.gap="6px"; box.append(el("div","label",z)); const ch=el("div","chips");
+    list.forEach(o=>{ const busy=tableItems(o.id).length>0, bk=(typeof bookingFor==="function")?null:null; const b=btn(o.label+(busy?" · có khách":""),"chip",()=>{ pick=o.id; chipsAll.forEach(c=>c.setAttribute("aria-pressed","false")); b.setAttribute("aria-pressed","true"); go.disabled=false; go.textContent=busy?"Gộp sang bàn "+o.label:"Chuyển sang bàn "+o.label; }); b.setAttribute("aria-pressed","false"); if(busy) b.style.opacity=".8"; chipsAll.push(b); ch.append(b); });
+    box.append(ch); sh.append(box); });
+  if(!others.length) sh.append(el("div","empty","Không còn bàn nào để chuyển."));
+  const row=el("div","row"); row.append(go, btn("Huỷ","ghost",closeSheet)); sh.append(row); $("#scrim").hidden=false;
+}
 function setStatus(t, s){
   const now=Date.now(), patch={status:s, changedAt:now};
   patch.queuedAt = STATES[s].queue ? ((STATES[t.status]?.queue && s!=="extra") ? (t.queuedAt||now) : now) : null;
@@ -1324,6 +1338,7 @@ function refreshOrderSheet(){
     if(ub.length && !clr.dataset.sure){ warn.textContent="Bàn còn "+money(sumItems(ub))+" chưa thu. Bấm lần nữa để vẫn dọn bàn."; clr.dataset.sure="1"; return; }
     clearTable(S.tables[t.id]); closeSheet(); toast("Bàn "+t.label+" đã trống");
   };
+  if(can("move") && its.length) acts.append(btn("Chuyển bàn","",()=>openMoveSheet(S.tables[t.id])));
   if(can("move")||can("pay")) acts.append(clr);
   acts.append(warn);
   const mo=$("#oMore"); if(!mo) return; mo.innerHTML="";
