@@ -869,7 +869,7 @@ function openOpeningEdit(sh){
     if(!nt.value.trim()){ err.textContent="Ghi lý do sửa để đối chiếu sau này."; return; }
     const bd=dc.get(), hasBd=Object.keys(bd).length>0;
     const edits=[...(sh.openingEdits||[]),{at:Date.now(),by:me.name,from:sh.openingCash||0,to:v,note:nt.value.trim()}];
-    closeSheet(); await quiet(put("shifts",sh.id,{...sh,openingCash:v,openingBreakdown:hasBd?bd:(sh.openingBreakdown&&Object.entries(sh.openingBreakdown).reduce((t,[m,q])=>t+m*q,0)===v?sh.openingBreakdown:null),openingEdits:edits}));
+    closeSheet(); const nsh={...sh,openingCash:v,expectedCash:sh.closedAt?v+(sh.cashSales||0)-(sh.expenseTotal||0):sh.expectedCash,openingBreakdown:hasBd?bd:(sh.openingBreakdown&&Object.entries(sh.openingBreakdown).reduce((t,[m,q])=>t+m*q,0)===v?sh.openingBreakdown:null),openingEdits:edits}; await quiet(put("shifts",sh.id,nsh)); if(R.data&&R.data.shifts){ const i=R.data.shifts.findIndex(z=>z.id===sh.id); if(i>=0) R.data.shifts[i]={...nsh,id:sh.id}; render(); }
     toast("Đã sửa tiền đầu ca: "+money(v)); }), btn("Huỷ","ghost",closeSheet));
   s.append(row); $("#scrim").hidden=false; oc.focus();
 }
@@ -1099,7 +1099,7 @@ function renderReport(v){
           let res, cls="", diff="";
           if(!closed){ res="Ca chưa đóng"; cls="small"; } else { const d=(got||0)-need; diff=d; if(d===0) res="Khớp két"; else { res=(d>0?"Dư ":"Thiếu ")+money(Math.abs(d)); cls="danger"; nBad++; } }
           const notes=[s.note, ...(s.openingEdits||[]).map(e=>"Sửa đầu ca "+money(e.from)+" → "+money(e.to)+" ("+e.note+")")].filter(Boolean);
-          const r=el("tr"); r.innerHTML=`<td>${ds}</td><td class="small">${hm(s.openedAt)}${closed?"–"+hm(s.closedAt):" (đang mở)"}<br>${esc(s.openedBy||"")}</td><td class="r">${money(s.openingCash||0)}</td><td class="r">${money(cash)}</td><td class="r">−${money(exp)}</td><td class="r">${money(need)}</td><td class="r"><b>${closed?money(got||0):"–"}</b></td><td class="${cls}"><b>${res}</b>${notes.length?`<br><span class="small">${esc(notes.join(" · "))}</span>`:""}</td>`; tb.append(r);
+          const r=el("tr"); r.innerHTML=`<td>${ds}</td><td class="small">${hm(s.openedAt)}${closed?"–"+hm(s.closedAt):" (đang mở)"}<br>${esc(s.openedBy||"")}</td><td class="r">${money(s.openingCash||0)}</td><td class="r">${money(cash)}</td><td class="r">−${money(exp)}</td><td class="r">${money(need)}</td><td class="r"><b>${closed?money(got||0):"–"}</b></td><td class="${cls}"><b>${res}</b>${notes.length?`<br><span class="small">${esc(notes.join(" · "))}</span>`:""}</td>`; if(can("settings")){ const eb=btn("Sửa đầu ca","ghost",()=>openOpeningEdit(s)); eb.style.marginTop="4px"; r.lastElementChild.append(el("br"),eb); } tb.append(r);
           csv.push([ds,hm(s.openedAt)+(closed?"–"+hm(s.closedAt):""),s.openedBy||"",s.openingCash||0,cash,oth,exp,need,closed?got||0:"",diff,res,notes.join(" · ")]); }); });
       t.append(tb); sc.append(t);
       c.append(el("div",nBad?"note warn":"note ok",nBad?"Có "+nBad+" ca/ngày lệch hoặc thiếu đối chiếu trong kỳ này.":"Mọi ca trong kỳ đều khớp két."), sc);
