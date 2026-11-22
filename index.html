@@ -892,10 +892,16 @@ function renderCash(v){
   const sh=currentShift();
   if(!sh){
     sc.append(el("div","small","Chưa có ca nào đang mở. Đếm tiền trong két rồi mở ca, cuối ca hệ thống tự tính số tiền mặt phải có."));
-    const oc=inp("openCash","vd: 500000","", "numeric");
+    const prev=Object.values(S.shifts).filter(s=>s.closedAt&&s.countedCash!=null).sort((a,b)=>b.closedAt-a.closedAt)[0]||null;
+    const oc=inp("openCash","vd: 500000",prev?String(prev.countedCash):"", "numeric");
     const odc=denomCounter(oc);
+    if(prev) sc.append(el("div","note","Cuối ca trước ("+hm(prev.closedAt)+" "+fmtDate(prev.day)+" · "+(prev.closedBy||prev.openedBy||"")+") đếm được "+money(prev.countedCash)+". Em đã điền sẵn, hãy đếm lại két và sửa nếu khác."));
     sc.append(field("Tiền đầu ca trong két",oc), odc.el);
-    sc.append(btn("Mở ca","primary",async()=>{ if(!can("shift")) return; const ob=odc.get(); resetForm(); await quiet(put("shifts",uid(),{openedBy:me.name,openedAt:Date.now(),openingCash:num(oc.value),openingBreakdown:ob,closedAt:null,day:bizKey()})); toast("Đã mở ca"); }));
+    const oerr=el("div","err"); sc.append(oerr); let warned0=false;
+    sc.append(btn("Mở ca","primary",async()=>{ if(!can("shift")) return; const v=num(oc.value);
+      if(oc.value.trim()===""){ oerr.textContent="Nhập tiền đầu ca đã đếm. Hệ thống cần số này để tính tiền cuối ca."; return; }
+      if(v===0 && !warned0){ warned0=true; oerr.textContent="Tiền đầu ca đang là 0đ. Nếu két thật sự trống, bấm Mở ca lần nữa để xác nhận."; return; }
+      const ob=odc.get(); resetForm(); await quiet(put("shifts",uid(),{openedBy:me.name,openedAt:Date.now(),openingCash:v,openingBreakdown:ob,prevClosing:prev?prev.countedCash:null,closedAt:null,day:bizKey()})); toast("Đã mở ca với tiền đầu ca "+money(v)); }));
   } else {
     const t=shiftTotals(sh);
     const grid=el("div","stack"); grid.style.gap="4px";
@@ -1098,7 +1104,7 @@ function renderReport(v){
         ss.forEach(s=>{ const closed=!!s.closedAt, tt=closed?null:shiftTotals(s), cash=closed?(s.cashSales||0):tt.cash, oth=closed?((s.transferSales||0)+(s.cardSales||0)):(tt.transfer+tt.card), exp=closed?(s.expenseTotal||0):tt.exp, need=closed?(s.expectedCash||0):tt.expected, got=s.countedCash;
           let res, cls="", diff="";
           if(!closed){ res="Ca chưa đóng"; cls="small"; } else { const d=(got||0)-need; diff=d; if(d===0) res="Khớp két"; else { res=(d>0?"Dư ":"Thiếu ")+money(Math.abs(d)); cls="danger"; nBad++; } }
-          const notes=[s.note, ...(s.openingEdits||[]).map(e=>"Sửa đầu ca "+money(e.from)+" → "+money(e.to)+" ("+e.note+")")].filter(Boolean);
+          const notes=[s.note, (s.prevClosing!=null&&s.prevClosing!==s.openingCash&&!(s.openingEdits&&s.openingEdits.length))?"Đầu ca "+money(s.openingCash)+" khác cuối ca trước "+money(s.prevClosing):"", ...(s.openingEdits||[]).map(e=>"Sửa đầu ca "+money(e.from)+" → "+money(e.to)+" ("+e.note+")")].filter(Boolean);
           const r=el("tr"); r.innerHTML=`<td>${ds}</td><td class="small">${hm(s.openedAt)}${closed?"–"+hm(s.closedAt):" (đang mở)"}<br>${esc(s.openedBy||"")}</td><td class="r">${money(s.openingCash||0)}</td><td class="r">${money(cash)}</td><td class="r">−${money(exp)}</td><td class="r">${money(need)}</td><td class="r"><b>${closed?money(got||0):"–"}</b></td><td class="${cls}"><b>${res}</b>${notes.length?`<br><span class="small">${esc(notes.join(" · "))}</span>`:""}</td>`; if(can("settings")){ const eb=btn("Sửa đầu ca","ghost",()=>openOpeningEdit(s)); eb.style.marginTop="4px"; r.lastElementChild.append(el("br"),eb); } tb.append(r);
           csv.push([ds,hm(s.openedAt)+(closed?"–"+hm(s.closedAt):""),s.openedBy||"",s.openingCash||0,cash,oth,exp,need,closed?got||0:"",diff,res,notes.join(" · ")]); }); });
       t.append(tb); sc.append(t);
