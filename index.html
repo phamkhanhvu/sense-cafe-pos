@@ -554,7 +554,7 @@ async function voidItem(i, reason){
 function billCode(d=new Date()){ return String(d.getFullYear()).slice(2)+pad(d.getMonth()+1)+pad(d.getDate())+"-"+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds()); }
 async function clearTable(t){
   await Promise.all(tableItems(t.id).map(i=>del("items", i.id)));
-  await quiet(put("tables", t.id, {...S.tables[t.id], status:"open", paid:false, pay:null, queuedAt:null, movedFrom:null, guests:null, changedAt:Date.now()}));
+  await quiet(put("tables", t.id, {...S.tables[t.id], status:"open", paid:false, pay:null, queuedAt:null, movedFrom:null, guests:null, disc:null, changedAt:Date.now()}));
 }
 async function moveTable(src, dst){
   const now=Date.now(), merging=tableItems(dst.id).length>0;
@@ -600,21 +600,24 @@ async function saveFile(filename, data, okMsg){
 }
 
 const newRef=()=>Array.from(crypto.getRandomValues(new Uint8Array(4)),b=>"23456789ABCDEFGHJKMNPQRSTUVWXYZ"[b%31]).join("");
-function billCalc(its){
-  const promos=computePromos(its), pa=promos.reduce((x,y)=>x+y.amount,0), s=sumItems(its);
-  return {s, promos, promoAmt:pa, manual:0, pts:0, ptsAmt:0, total:Math.max(0,s-pa), ch:its};
+const r1k=x=>Math.round(x/1000)*1000;
+function itemDisc(its,ip){ return (its||[]).reduce((a,i)=>{ const p=ip&&ip[i.id]; return a+(p>0?Math.min(i.price*i.qty,r1k(i.price*i.qty*p/100)):0); },0); }
+function billCalc(its,t){
+  const promos=computePromos(its), pa=promos.reduce((x,y)=>x+y.amount,0), s=sumItems(its), d=t&&t.disc||null;
+  const manual=Math.max(0,Math.min(s-pa, itemDisc(its,d&&d.ip)+((d&&d.amt)||0)));
+  return {s, promos, promoAmt:pa, manual, pts:0, ptsAmt:0, total:Math.max(0,s-pa-manual), ch:its};
 }
 async function requestBill(t){
   const its=unbilled(t.id); if(!its.length) return;
-  const c=billCalc(its), ref=t.pay&&t.pay.total===c.total&&t.pay.ids.length===its.length&&its.every(i=>t.pay.ids.includes(i.id))?t.pay.ref:newRef();
-  const pay={ref,total:c.total,ids:its.map(i=>i.id),at:Date.now(),by:me.name,calc:{s:c.s,promos:c.promos,promoAmt:c.promoAmt}};
+  const c=billCalc(its,S.tables[t.id]||t), ref=t.pay&&t.pay.total===c.total&&t.pay.ids.length===its.length&&its.every(i=>t.pay.ids.includes(i.id))?t.pay.ref:newRef();
+  const pay={ref,total:c.total,ids:its.map(i=>i.id),at:Date.now(),by:me.name,calc:{s:c.s,promos:c.promos,promoAmt:c.promoAmt,manual:c.manual}};
   await quiet(put("tables",t.id,{...S.tables[t.id],pay}));
   const old=S.prints[ref]; await quiet(put("prints",ref,{ref,tableId:t.id,tableLabel:t.label,total:c.total,at:old?.at||Date.now(),lastAt:Date.now(),count:(old?.count||0)+1,by:old?.by||me.name,lastBy:me.name,billId:old?.billId||null,day:bizKey()}));
-  printReceipt({code:billCode(),tableLabel:t.label,lines:its.map(i=>({name:i.name,opt:optLabel(i.opts),qty:i.qty,price:i.price})),subtotal:c.s,promos:c.promos,discount:c.promoAmt,total:c.total,paidAt:Date.now(),by:me.name,payDesc:"Ban "+t.label+" "+ref},true);
+  printReceipt({code:billCode(),tableLabel:t.label,lines:its.map(i=>({name:i.name,opt:optLabel(i.opts),qty:i.qty,price:i.price})),subtotal:c.s,promos:c.promos,manualDiscount:c.manual,discount:c.promoAmt+c.manual,total:c.total,paidAt:Date.now(),by:me.name,payDesc:"Ban "+t.label+" "+ref},true);
 }
 async function cashReceived(t){
   if(!can("pay")||!t.pay) return;
-  const its=unbilled(t.id), c=billCalc(its);
+  const its=unbilled(t.id), c=billCalc(its,S.tables[t.id]||t);
   if(!its.length||c.total!==t.pay.total){ toast("Bàn đã thay đổi so với hoá đơn đã in. Bấm Tính tiền để thu lại."); return; }
   const b=await checkout(t,its,c,"cash",c.total,null); showPaid(b);
 }
@@ -627,7 +630,7 @@ async function autoSettle(){
     if(sheetKind==="checkout"&&sheetTable===t.id) continue;
     const ref=p.ref.toLowerCase(), tx=Object.values(S.bank||{}).find(x=>!x.billId&&x.at>=p.at-60000&&norm(x).includes(ref));
     if(!tx) continue;
-    const its=unbilled(t.id), c=billCalc(its);
+    const its=unbilled(t.id), c=billCalc(its,S.tables[t.id]||t);
     if(tx.amount!==p.total||c.total!==p.total||its.length!==p.ids.length||!its.every(i=>p.ids.includes(i.id))){
       if(!p.warned){ p.warned=1; toast("Bàn "+t.label+": nhận "+money(tx.amount)+" nhưng khác hoá đơn ("+money(p.total)+") hoặc bàn đã đổi món. Kiểm tra tay."); }
       continue; }
@@ -1771,7 +1774,7 @@ function orderExtras(t){
 function openCheckout(t){
   if(!can("pay")) return;
   sheetKind="checkout"; sheetTable=t.id;
-  const its=unbilled(t.id), sel=new Set(its.map(i=>i.id)), off=new Set();
+  const its=unbilled(t.id), sel=new Set(its.map(i=>i.id)), off=new Set(), ip={...((S.tables[t.id]?.disc||{}).ip||{})};
   let method="cash", cust=null, ptsUse=0;
   const sh=$("#sheet"); sh.className="sheet wide"; sh.innerHTML="";
   sh.append(Object.assign(el("h3",null,"Tính tiền · Bàn "+t.label),{id:"sheetTitle"}));
@@ -1779,14 +1782,20 @@ function openCheckout(t){
   const ls=el("div","cur");
   its.forEach(i=>{ const r=el("label","chk"); const cb=el("input"); cb.type="checkbox"; cb.id="ck-"+i.id; cb.checked=true; cb.onchange=()=>{ cb.checked?sel.add(i.id):sel.delete(i.id); upd(); };
     const nm=el("span",null,i.qty+"× "+i.name); if(i.opts?.length) nm.append(el("span","small"," ("+optLabel(i.opts)+")"));
-    r.append(cb, nm, el("span","money",money(i.price*i.qty))); ls.append(r); });
+    const pr=el("span","money"); pr.dataset.item=i.id;
+    r.append(cb, nm, pr); ls.append(r);
+    const ir=el("div","row"); ir.style.cssText="margin:-2px 0 6px 28px;gap:6px"; ir.append(el("span","small","Giảm món:"));
+    [10,20].forEach(p=>{ const b=btn("−"+p+"%","chip",()=>{ ip[i.id]=ip[i.id]===p?0:p; upd(); saveDisc(); }); b.dataset.ip=i.id+":"+p; ir.append(b); });
+    ls.append(ir); });
   const sr=el("div","tot"), subEl=el("span","money"); sr.append(el("span",null,"Tạm tính"), subEl); ls.append(sr); sh.append(ls);
   const promoBox=el("div","stack"); promoBox.style.gap="4px"; sh.append(promoBox);
   const minNote=el("div","note warn"); minNote.hidden=true; sh.append(minNote);
   const di=inp("disc","0","","numeric"); di.style.flex="1";
   const dr=el("div","row"), dl=el("label","small","Giảm thêm (đ)"); dl.htmlFor="disc";
-  const base=()=>sumItems(its.filter(i=>sel.has(i.id)));
-  dr.append(dl, di, btn("−10%","chip",()=>{ di.value=Math.round(base()*.1/1000)*1000; upd(); }), btn("−20%","chip",()=>{ di.value=Math.round(base()*.2/1000)*1000; upd(); }), btn("Bỏ","chip",()=>{ di.value=""; upd(); }));
+  const base=()=>{ const ch=its.filter(i=>sel.has(i.id)); return Math.max(0,sumItems(ch)-itemDisc(ch,ip)); };
+  const d0=S.tables[t.id]?.disc; if(d0&&d0.amt) di.value=d0.amt;
+  let dTimer=0; const saveDisc=()=>{ clearTimeout(dTimer); dTimer=setTimeout(()=>{ const cur=S.tables[t.id]; if(!cur||sheetTable!==t.id) return; const ipc={}; Object.entries(ip).forEach(([k,v])=>{ if(v>0) ipc[k]=v; }); const amt=num(di.value); quiet(put("tables",t.id,{...cur,disc:(amt||Object.keys(ipc).length)?{ip:ipc,amt}:null})); },400); };
+  dr.append(dl, di, btn("−10% bill","chip",()=>{ di.value=Math.round(base()*.1/1000)*1000; upd(); saveDisc(); }), btn("−20% bill","chip",()=>{ di.value=Math.round(base()*.2/1000)*1000; upd(); saveDisc(); }), btn("Bỏ","chip",()=>{ di.value=""; Object.keys(ip).forEach(k=>delete ip[k]); upd(); saveDisc(); }));
   sh.append(dr);
   const ptsInfo=el("span","small");
   const custBox=el("div","stack custbox"); custBox.style.gap="6px";
@@ -1822,7 +1831,7 @@ function openCheckout(t){
   const btns=el("div","row"); btns.append(ok, btn("Quay lại","ghost",()=>openOrder(S.tables[t.id]))); sh.append(btns);
   function calc(){
     const ch=its.filter(i=>sel.has(i.id)), s=sumItems(ch), all=computePromos(ch), promos=all.filter(p=>!off.has(p.id));
-    const promoAmt=Math.min(s,promos.reduce((a,p)=>a+p.amount,0)), manual=Math.min(s-promoAmt,num(di.value)), after=s-promoAmt-manual;
+    const promoAmt=Math.min(s,promos.reduce((a,p)=>a+p.amount,0)), manual=Math.min(s-promoAmt,itemDisc(ch,ip)+num(di.value)), after=s-promoAmt-manual;
     const maxPts=cust&&!cust.isNew&&loyValue()>0 ? Math.min(cust.points||0, Math.floor(after/loyValue())) : 0;
     const pts=Math.min(ptsUse,maxPts), ptsAmt=pts*loyValue();
     return {ch,s,all,promos,promoAmt,manual,pts,ptsAmt,total:Math.max(0,after-ptsAmt)};
@@ -1830,6 +1839,8 @@ function openCheckout(t){
   let lastQr="";
   function upd(){
     const c=calc(); subEl.textContent=money(c.s); big.textContent=money(c.total);
+    ls.querySelectorAll("[data-item]").forEach(e=>{ const i=its.find(x=>x.id===e.dataset.item), d=itemDisc([i],ip); e.textContent=d?money(i.price*i.qty-d)+" (−"+money(d)+")":money(i.price*i.qty); });
+    ls.querySelectorAll("[data-ip]").forEach(b=>{ const [id,p]=b.dataset.ip.split(":"); b.setAttribute("aria-pressed",String(ip[id]===+p)); });
     promoBox.innerHTML="";
     c.all.forEach(p=>{ const r=el("label","chk"); const cb=el("input"); cb.type="checkbox"; cb.id="pm-"+p.id; cb.checked=!off.has(p.id); cb.onchange=()=>{ cb.checked?off.delete(p.id):off.add(p.id); upd(); }; r.append(cb, el("span",null,"Khuyến mãi: "+p.name), el("span","money","−"+money(p.amount))); promoBox.append(r); });
     const show=todayShow(); const need=show?.minSpend && t.guests ? show.minSpend*t.guests : 0;
@@ -1867,7 +1878,7 @@ function openCheckout(t){
       else waitEl.append(el("div","note","Đang chờ tiền về tài khoản… (tự cập nhật, không cần tải lại)"));
     }
   }
-  di.oninput=upd; gi.oninput=upd;
+  di.oninput=()=>{ upd(); saveDisc(); }; gi.oninput=upd;
   ok.onclick=async()=>{ ok.disabled=true; const c=calc(), g=num(gi.value);
     if(cust?.isNew && !String(cust.name||"").trim()) cust.name="Khách "+cust.phone.slice(-4);
     const b=await checkout(S.tables[t.id], c.ch, c, method, method==="cash"?g:null, cust?{phone:cust.phone,name:cust.name||"",birthday:cust.birthday||""}:null);
