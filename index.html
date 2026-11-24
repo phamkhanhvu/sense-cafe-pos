@@ -621,6 +621,14 @@ async function cashReceived(t){
   if(!its.length||c.total!==t.pay.total){ toast("Bàn đã thay đổi so với hoá đơn đã in. Bấm Tính tiền để thu lại."); return; }
   const b=await checkout(t,its,c,"cash",c.total,null); showPaid(b);
 }
+async function transferReceived(t){
+  if(!can("pay")) return;
+  t=S.tables[t.id]||t; const its=unbilled(t.id); if(!its.length) return;
+  const c=billCalc(its,t);
+  if(t.pay&&c.total!==t.pay.total){ toast("Bàn đã thay đổi so với hoá đơn đã in. In lại hoá đơn rồi thu lại."); return; }
+  if(!confirm("Xác nhận Bàn "+t.label+" đã chuyển khoản "+money(c.total)+"?\nChỉ bấm khi tiền đã vào tài khoản.")) return;
+  const b=await checkout(t,its,c,"transfer",null,null); showPaid(b);
+}
 const settling=new Set();
 async function autoSettle(){
   if(!can("pay")||!S.sepay?.key) return;
@@ -1339,6 +1347,7 @@ function refreshOrderSheet(){
   const ub=unbilled(t.id);
   if(can("pay")){ const pay=btn("Tính tiền","primary",()=>openCheckout(S.tables[t.id])); pay.disabled=!ub.length; acts.append(pay); }
   if(ub.length && (can("pay")||can("order"))) acts.append(btn(t.pay?"In lại hoá đơn":"In hoá đơn","",()=>requestBill(S.tables[t.id])));
+  if(ub.length && can("pay")) acts.append(btn("Đã nhận chuyển khoản","",()=>transferReceived(S.tables[t.id])));
   if(t.pay && can("pay")){ const cb=btn("Đã nhận tiền mặt "+money(t.pay.total),"primary",()=>cashReceived(S.tables[t.id])); acts.append(cb); }
   const warn=el("span","small"); warn.style.color="var(--danger)";
   const clr=btn("Khách về, dọn bàn",null); clr.disabled=t.status==="open"&&!its.length;
