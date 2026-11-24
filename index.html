@@ -1318,6 +1318,11 @@ function openOrder(t){
   renderPick(); renderCart(); refreshOrderSheet();
   $("#scrim").hidden=false;
 }
+async function setItemDisc(tid,iid,p){
+  const cur=S.tables[tid]; if(!cur) return; const d=cur.disc||{}, ip={...(d.ip||{})};
+  if(ip[iid]===p) delete ip[iid]; else ip[iid]=p;
+  await quiet(put("tables",tid,{...cur,disc:(Object.keys(ip).length||d.amt)?{ip,amt:d.amt||0}:null}));
+}
 function refreshOrderSheet(){
   const t=S.tables[sheetTable]; if(!t){ closeSheet(); return; }
   $("#oStatus").textContent = STATES[t.status].label + (t.movedFrom?" · từ bàn "+t.movedFrom:"");
@@ -1337,10 +1342,14 @@ function refreshOrderSheet(){
       const reason=inp("vr-"+i.id,"Lý do huỷ (khách đổi món, làm sai…)");
       vr.append(reason, btn("Xác nhận huỷ","danger",()=>voidItem(i, reason.value.trim())), btn("Thôi","ghost",()=>{ vr.hidden=true; }));
       x.onclick=()=>{ vr.hidden=false; reason.focus(); };
-      r.append(el("span","q",i.qty+"×"), n, stb, el("span","money",money(i.price*i.qty)), x, vr);
+      const dsc=!i.billed?itemDisc([i],(t.disc||{}).ip):0;
+      r.append(el("span","q",i.qty+"×"), n, stb, el("span","money",dsc?money(i.price*i.qty-dsc)+" (−"+money(dsc)+")":money(i.price*i.qty)), x, vr);
       cur.append(r);
+      if(!i.billed && can("pay")){ const dr2=el("div","row"); dr2.style.cssText="margin:-2px 0 6px 28px;gap:6px"; dr2.append(el("span","small","Giảm món:"));
+        [10,20].forEach(p=>{ const b=btn("−"+p+"%","chip",()=>setItemDisc(t.id,i.id,p)); b.setAttribute("aria-pressed",String(((t.disc||{}).ip||{})[i.id]===p)); dr2.append(b); });
+        cur.append(dr2); }
     });
-    const owe=sumItems(unbilled(t.id)), tot=el("div","tot"); tot.append(el("span",null, owe?"Chưa thanh toán":"Đã thanh toán đủ"), el("span","money",money(owe))); cur.append(tot);
+    const ubx=unbilled(t.id), owe=Math.max(0,sumItems(ubx)-itemDisc(ubx,(t.disc||{}).ip)), tot=el("div","tot"); tot.append(el("span",null, owe?"Chưa thanh toán":"Đã thanh toán đủ"), el("span","money",money(owe))); cur.append(tot);
   }
   orderExtras(t);
   const acts=$("#oActs"); acts.innerHTML="";
@@ -1792,10 +1801,7 @@ function openCheckout(t){
   its.forEach(i=>{ const r=el("label","chk"); const cb=el("input"); cb.type="checkbox"; cb.id="ck-"+i.id; cb.checked=true; cb.onchange=()=>{ cb.checked?sel.add(i.id):sel.delete(i.id); upd(); };
     const nm=el("span",null,i.qty+"× "+i.name); if(i.opts?.length) nm.append(el("span","small"," ("+optLabel(i.opts)+")"));
     const pr=el("span","money"); pr.dataset.item=i.id;
-    r.append(cb, nm, pr); ls.append(r);
-    const ir=el("div","row"); ir.style.cssText="margin:-2px 0 6px 28px;gap:6px"; ir.append(el("span","small","Giảm món:"));
-    [10,20].forEach(p=>{ const b=btn("−"+p+"%","chip",()=>{ ip[i.id]=ip[i.id]===p?0:p; upd(); saveDisc(); }); b.dataset.ip=i.id+":"+p; ir.append(b); });
-    ls.append(ir); });
+    r.append(cb, nm, pr); ls.append(r); });
   const sr=el("div","tot"), subEl=el("span","money"); sr.append(el("span",null,"Tạm tính"), subEl); ls.append(sr); sh.append(ls);
   const promoBox=el("div","stack"); promoBox.style.gap="4px"; sh.append(promoBox);
   const minNote=el("div","note warn"); minNote.hidden=true; sh.append(minNote);
@@ -1849,7 +1855,7 @@ function openCheckout(t){
   function upd(){
     const c=calc(); subEl.textContent=money(c.s); big.textContent=money(c.total);
     ls.querySelectorAll("[data-item]").forEach(e=>{ const i=its.find(x=>x.id===e.dataset.item), d=itemDisc([i],ip); e.textContent=d?money(i.price*i.qty-d)+" (−"+money(d)+")":money(i.price*i.qty); });
-    ls.querySelectorAll("[data-ip]").forEach(b=>{ const [id,p]=b.dataset.ip.split(":"); b.setAttribute("aria-pressed",String(ip[id]===+p)); });
+
     promoBox.innerHTML="";
     c.all.forEach(p=>{ const r=el("label","chk"); const cb=el("input"); cb.type="checkbox"; cb.id="pm-"+p.id; cb.checked=!off.has(p.id); cb.onchange=()=>{ cb.checked?off.delete(p.id):off.add(p.id); upd(); }; r.append(cb, el("span",null,"Khuyến mãi: "+p.name), el("span","money","−"+money(p.amount))); promoBox.append(r); });
     const show=todayShow(); const need=show?.minSpend && t.guests ? show.minSpend*t.guests : 0;
