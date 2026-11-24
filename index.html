@@ -420,7 +420,7 @@ const NEXT = {new:"making", making:"done", done:"served"};
 const STATIONS = {bar:"Pha chế", bep:"Bếp"};
 const METHODS = {cash:"Tiền mặt", transfer:"Chuyển khoản", card:"Thẻ"};
 const ROLES = {
-  quanly: {label:"Quản lý",       views:["ban","bep","nhac","menu","kho","khach","thuchi","lich","band","baocao","nhansu","caidat"], perms:["rota","order","pay","serve","void","voidBill","menu","soldout","shift","reports","settings","move","stock","stockIn","customers","music","shows","booking","hr","promo"]},
+  quanly: {label:"Quản lý",       views:["ban","bep","nhac","menu","kho","khach","thuchi","lich","band","baocao","nhansu","caidat"], perms:["rota","order","pay","serve","void","voidBill","menu","soldout","shift","reports","settings","move","stock","stockIn","customers","music","shows","booking","hr","promo","discount"]},
   thungan:{label:"Thu ngân",      views:["ban","bep","nhac","menu","kho","khach","thuchi","lich","band"], perms:["order","pay","serve","void","soldout","shift","move","stockIn","customers","music","shows","booking"]},
   phucvu: {label:"Phục vụ",       views:["ban","bep","nhac","kho","thuchi","lich","band"], perms:["order","pay","serve","move","shift","stockIn","music","booking"]},
   bep:    {label:"Pha chế / Bếp", views:["bep","ban","menu","kho","lich","band"], perms:["serve","soldout","stockIn"]},
@@ -1345,7 +1345,7 @@ function refreshOrderSheet(){
       const dsc=!i.billed?itemDisc([i],(t.disc||{}).ip):0;
       r.append(el("span","q",i.qty+"×"), n, stb, el("span","money",dsc?money(i.price*i.qty-dsc)+" (−"+money(dsc)+")":money(i.price*i.qty)), x, vr);
       cur.append(r);
-      if(!i.billed && can("pay")){ const dr2=el("div","row"); dr2.style.cssText="margin:-2px 0 6px 28px;gap:6px"; dr2.append(el("span","small","Giảm món:"));
+      if(!i.billed && can("discount")){ const dr2=el("div","row"); dr2.style.cssText="margin:-2px 0 6px 28px;gap:6px"; dr2.append(el("span","small","Giảm món:"));
         [10,20].forEach(p=>{ const b=btn("−"+p+"%","chip",()=>setItemDisc(t.id,i.id,p)); b.setAttribute("aria-pressed",String(((t.disc||{}).ip||{})[i.id]===p)); dr2.append(b); });
         cur.append(dr2); }
     });
@@ -1811,7 +1811,7 @@ function openCheckout(t){
   const d0=S.tables[t.id]?.disc; if(d0&&d0.amt) di.value=d0.amt;
   let dTimer=0; const saveDisc=()=>{ clearTimeout(dTimer); dTimer=setTimeout(()=>{ const cur=S.tables[t.id]; if(!cur||sheetTable!==t.id) return; const ipc={}; Object.entries(ip).forEach(([k,v])=>{ if(v>0) ipc[k]=v; }); const amt=num(di.value); quiet(put("tables",t.id,{...cur,disc:(amt||Object.keys(ipc).length)?{ip:ipc,amt}:null})); },400); };
   dr.append(dl, di, btn("−10% bill","chip",()=>{ di.value=Math.round(base()*.1/1000)*1000; upd(); saveDisc(); }), btn("−20% bill","chip",()=>{ di.value=Math.round(base()*.2/1000)*1000; upd(); saveDisc(); }), btn("Bỏ","chip",()=>{ di.value=""; Object.keys(ip).forEach(k=>delete ip[k]); upd(); saveDisc(); }));
-  sh.append(dr);
+  if(can("discount")) sh.append(dr);
   const ptsInfo=el("span","small");
   const custBox=el("div","stack custbox"); custBox.style.gap="6px";
   if(loyOn()) sh.append(custBox);
@@ -1857,6 +1857,7 @@ function openCheckout(t){
     ls.querySelectorAll("[data-item]").forEach(e=>{ const i=its.find(x=>x.id===e.dataset.item), d=itemDisc([i],ip); e.textContent=d?money(i.price*i.qty-d)+" (−"+money(d)+")":money(i.price*i.qty); });
 
     promoBox.innerHTML="";
+    if(!can("discount") && c.manual>0) promoBox.append(el("div","note","Quản lý đã giảm giá: −"+money(c.manual)));
     c.all.forEach(p=>{ const r=el("label","chk"); const cb=el("input"); cb.type="checkbox"; cb.id="pm-"+p.id; cb.checked=!off.has(p.id); cb.onchange=()=>{ cb.checked?off.delete(p.id):off.add(p.id); upd(); }; r.append(cb, el("span",null,"Khuyến mãi: "+p.name), el("span","money","−"+money(p.amount))); promoBox.append(r); });
     const show=todayShow(); const need=show?.minSpend && t.guests ? show.minSpend*t.guests : 0;
     minNote.hidden=!(need && c.s<need); if(!minNote.hidden) minNote.textContent="Đêm nhạc gọi tối thiểu "+money(show.minSpend)+"/khách: bàn "+t.guests+" khách cần "+money(need)+", đang "+money(c.s)+".";
