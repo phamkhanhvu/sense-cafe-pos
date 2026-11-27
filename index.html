@@ -585,6 +585,30 @@ function openMoveSheet(t){
   if(!others.length) sh.append(el("div","empty","Không còn bàn nào để chuyển."));
   const row=el("div","row"); row.append(go, btn("Huỷ","ghost",closeSheet)); sh.append(row); $("#scrim").hidden=false;
 }
+async function moveItem(i, dst){
+  const now=Date.now(), src=S.tables[i.tableId]; if(!src||!dst||src.id===dst.id) return;
+  const had=tableItems(dst.id).length>0;
+  await quiet(put("items", i.id, {...i, tableId:dst.id, tableLabel:dst.label}));
+  const its=tableItems(dst.id), pending=its.some(x=>x.state!=="served"&&!x.billed);
+  const status = pending ? (STATES[dst.status]?.queue&&had?dst.status:"wait") : "serve";
+  await quiet(put("tables", dst.id, {...S.tables[dst.id], status, queuedAt:pending?(S.tables[dst.id].queuedAt||now):null, paid:false, pay:null, changedAt:now, movedFrom:had?S.tables[dst.id].movedFrom:src.label}));
+  const left=tableItems(src.id);
+  const sd=src.disc&&src.disc.ip?{...src.disc,ip:{...src.disc.ip}}:null; if(sd){ delete sd.ip[i.id]; }
+  if(!left.length) await quiet(put("tables", src.id, {...S.tables[src.id], status:"open", paid:false, pay:null, queuedAt:null, movedFrom:null, guests:null, disc:null, changedAt:now}));
+  else await quiet(put("tables", src.id, {...S.tables[src.id], pay:null, disc:sd, changedAt:now}));
+}
+function openItemMove(t,i){
+  sheetKind="move"; const sh=$("#sheet"); sh.className="sheet"; sh.innerHTML="";
+  sh.append(Object.assign(el("h3",null,"Chuyển món sang bàn khác"),{id:"sheetTitle"}));
+  sh.append(el("div","small",i.qty+"× "+i.name+" · từ bàn "+t.label));
+  const others=tablesList().filter(x=>x.id!==t.id && x.status!=="closed"), zones={}; others.forEach(o=>(zones[o.zone||"Khác"] ||= []).push(o));
+  let pick=null; const chipsAll=[];
+  const go=btn("Chuyển","primary",async()=>{ const dst=S.tables[pick]; if(!dst) return; closeSheet(); await moveItem(i,dst); toast("Đã chuyển "+i.name+" sang bàn "+dst.label); }); go.disabled=true;
+  Object.entries(zones).forEach(([z,list])=>{ const box=el("div","stack"); box.style.gap="6px"; box.append(el("div","label",z)); const ch=el("div","chips");
+    list.forEach(o=>{ const b=btn(o.label+(tableItems(o.id).length?" · có khách":""),"chip",()=>{ pick=o.id; chipsAll.forEach(c=>c.setAttribute("aria-pressed","false")); b.setAttribute("aria-pressed","true"); go.disabled=false; }); b.setAttribute("aria-pressed","false"); chipsAll.push(b); ch.append(b); });
+    box.append(ch); sh.append(box); });
+  const row=el("div","row"); row.append(go, btn("Huỷ","ghost",()=>openOrder(S.tables[t.id]))); sh.append(row); $("#scrim").hidden=false;
+}
 function setStatus(t, s){
   const now=Date.now(), patch={status:s, changedAt:now};
   patch.queuedAt = STATES[s].queue ? ((STATES[t.status]?.queue && s!=="extra") ? (t.queuedAt||now) : now) : null;
@@ -1345,6 +1369,7 @@ function refreshOrderSheet(){
       const dsc=!i.billed?itemDisc([i],(t.disc||{}).ip):0;
       r.append(el("span","q",i.qty+"×"), n, stb, el("span","money",dsc?money(i.price*i.qty-dsc)+" (−"+money(dsc)+")":money(i.price*i.qty)), x, vr);
       cur.append(r);
+      if(!i.billed && can("move")){ const mb=btn("Chuyển món sang bàn khác","ghost",()=>openItemMove(S.tables[t.id],i)); mb.style.cssText="margin:-2px 0 6px 28px;font-size:13px"; cur.append(mb); }
       if(!i.billed && can("discount")){ const dr2=el("div","row"); dr2.style.cssText="margin:-2px 0 6px 28px;gap:6px"; dr2.append(el("span","small","Giảm món:"));
         [10,20].forEach(p=>{ const b=btn("−"+p+"%","chip",()=>setItemDisc(t.id,i.id,p)); b.setAttribute("aria-pressed",String(((t.disc||{}).ip||{})[i.id]===p)); dr2.append(b); });
         cur.append(dr2); }
