@@ -420,7 +420,7 @@ const NEXT = {new:"making", making:"done", done:"served"};
 const STATIONS = {bar:"Pha chế", bep:"Bếp"};
 const METHODS = {cash:"Tiền mặt", transfer:"Chuyển khoản", card:"Thẻ"};
 const ROLES = {
-  quanly: {label:"Quản lý",       views:["ban","bep","nhac","menu","kho","khach","thuchi","lich","band","baocao","nhansu","caidat"], perms:["rota","order","pay","serve","void","voidBill","menu","soldout","shift","reports","settings","move","stock","stockIn","customers","music","shows","booking","hr","promo","discount"]},
+  quanly: {label:"Quản lý",       views:["ban","bep","nhac","menu","kho","khach","thuchi","lich","band","baocao","nhansu","caidat"], perms:["rota","order","pay","serve","void","voidBill","menu","soldout","shift","reports","settings","move","stock","stockIn","customers","music","shows","booking","hr","promo","discount","moveItem"]},
   thungan:{label:"Thu ngân",      views:["ban","bep","nhac","menu","kho","khach","thuchi","lich","band"], perms:["order","pay","serve","void","soldout","shift","move","stockIn","customers","music","shows","booking"]},
   phucvu: {label:"Phục vụ",       views:["ban","bep","nhac","kho","thuchi","lich","band"], perms:["order","pay","serve","move","shift","stockIn","music","booking"]},
   bep:    {label:"Pha chế / Bếp", views:["bep","ban","menu","kho","lich","band"], perms:["serve","soldout","stockIn"]},
@@ -1369,7 +1369,7 @@ function refreshOrderSheet(){
       const dsc=!i.billed?itemDisc([i],(t.disc||{}).ip):0;
       r.append(el("span","q",i.qty+"×"), n, stb, el("span","money",dsc?money(i.price*i.qty-dsc)+" (−"+money(dsc)+")":money(i.price*i.qty)), x, vr);
       cur.append(r);
-      if(!i.billed && can("move")){ const mb=btn("Chuyển món sang bàn khác","ghost",()=>openItemMove(S.tables[t.id],i)); mb.style.cssText="margin:-2px 0 6px 28px;font-size:13px"; cur.append(mb); }
+      if(!i.billed && can("moveItem")){ const mb=btn("Chuyển món sang bàn khác","ghost",()=>openItemMove(S.tables[t.id],i)); mb.style.cssText="margin:-2px 0 6px 28px;font-size:13px"; cur.append(mb); }
       if(!i.billed && can("discount")){ const dr2=el("div","row"); dr2.style.cssText="margin:-2px 0 6px 28px;gap:6px"; dr2.append(el("span","small","Giảm món:"));
         [10,20].forEach(p=>{ const b=btn("−"+p+"%","chip",()=>setItemDisc(t.id,i.id,p)); b.setAttribute("aria-pressed",String(((t.disc||{}).ip||{})[i.id]===p)); dr2.append(b); });
         cur.append(dr2); }
